@@ -1,0 +1,470 @@
+/*
+ * Example layout. Deliberately plain — every colour is a design token from
+ * theme.css, so the whole thing re-skins by regenerating that one file
+ * (see example/build-theme.ts) and follows light/dark off `:root.dark`.
+ */
+
+:root {
+	color-scheme: light;
+}
+:root.dark {
+	color-scheme: dark;
+}
+
+html,
+body {
+	height: 100%;
+}
+body {
+	min-height: 100dvh;
+}
+
+#app {
+	height: 100dvh;
+}
+
+/* ------------------------------------------------------------------ shared */
+
+button {
+	font: inherit;
+	font-size: 0.85rem;
+	padding: 0.4rem 0.8rem;
+	border: 1px solid var(--app-color-border);
+	border-radius: 0.4rem;
+	background: var(--app-color-surface);
+	color: var(--app-color-surface-foreground);
+	cursor: pointer;
+}
+button:hover:not(:disabled) {
+	background: var(--app-color-surface-hover);
+}
+button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+button.primary {
+	border-color: transparent;
+	background: var(--app-color-primary);
+	color: var(--app-color-primary-foreground);
+}
+button.primary:hover:not(:disabled) {
+	background: var(--app-color-primary-hover);
+}
+button.ghost {
+	background: transparent;
+}
+button[aria-pressed="true"] {
+	border-color: var(--app-color-accent);
+	background: var(--app-color-surface-accent);
+	color: var(--app-color-surface-accent-foreground);
+}
+
+input[type="text"],
+input:not([type]) {
+	font: inherit;
+	font-size: 0.9rem;
+	width: 100%;
+	padding: 0.45rem 0.6rem;
+	border: 1px solid var(--app-color-border);
+	border-radius: 0.4rem;
+	background: var(--app-color-input);
+	color: var(--app-color-foreground);
+}
+
+:where(button, input):focus-visible {
+	outline: 2px solid var(--app-color-ring);
+	outline-offset: 2px;
+}
+
+.error {
+	margin: 0;
+	padding: 0.5rem 0.7rem;
+	border: 1px solid var(--app-color-surface-destructive-border);
+	border-radius: 0.4rem;
+	background: var(--app-color-surface-destructive);
+	color: var(--app-color-surface-destructive-foreground);
+	font-size: 0.82rem;
+}
+
+/* ------------------------------------------------------------------- login */
+
+.login {
+	max-width: 27rem;
+	margin: 0 auto;
+	padding: clamp(2rem, 8vh, 5rem) 1.25rem;
+	display: grid;
+	gap: 0.9rem;
+}
+.login h1 {
+	margin: 0;
+	font-size: 1.4rem;
+}
+.login .lead {
+	margin: 0;
+	font-size: 0.85rem;
+	color: var(--app-color-muted-foreground);
+}
+.login label {
+	display: grid;
+	gap: 0.3rem;
+	font-size: 0.8rem;
+}
+.login label > span {
+	font-weight: 600;
+}
+.login small {
+	color: var(--app-color-muted-foreground);
+	line-height: 1.5;
+}
+.login .hint {
+	margin: 0;
+	font-size: 0.76rem;
+	line-height: 1.6;
+	color: var(--app-color-muted-foreground);
+}
+.login code {
+	font-size: 0.9em;
+}
+
+/* -------------------------------------------------------------------- feed */
+
+.feed {
+	height: 100%;
+	max-width: 64rem;
+	margin: 0 auto;
+	padding: 0.9rem 1rem 1rem;
+	display: grid;
+	grid-template-columns: 13rem 1fr;
+	grid-template-rows: auto 1fr;
+	grid-template-areas:
+		"header header"
+		"sidebar main";
+	gap: 0.9rem;
+	min-height: 0;
+}
+
+.feed-header {
+	grid-area: header;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	flex-wrap: wrap;
+	padding-bottom: 0.7rem;
+	border-bottom: 1px solid var(--app-color-border);
+}
+.identity {
+	font-size: 0.9rem;
+}
+.identity .sep {
+	color: var(--app-color-muted-foreground);
+	margin: 0 0.35rem;
+}
+.identity .project {
+	color: var(--app-color-muted-foreground);
+}
+.identity .project::before {
+	content: "@";
+}
+.header-right {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+/* Connection badge — `data-state` mirrors the client's connection state. */
+.status,
+.resume {
+	font-size: 0.72rem;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	padding: 0.2rem 0.5rem;
+	border-radius: 999px;
+	background: var(--app-color-muted);
+	color: var(--app-color-muted-foreground);
+	white-space: nowrap;
+}
+.status[data-state="open"] {
+	background: var(--app-color-surface-success);
+	color: var(--app-color-surface-success-foreground);
+}
+.status[data-state="reconnecting"],
+.status[data-state="connecting"] {
+	background: var(--app-color-surface-warning);
+	color: var(--app-color-surface-warning-foreground);
+}
+.status[data-state="terminated"],
+.status[data-state="disposed"] {
+	background: var(--app-color-surface-destructive);
+	color: var(--app-color-surface-destructive-foreground);
+}
+
+/* Replay badge — what the last `hello` said. The point of the example. */
+.resume[data-state="resumed"] {
+	background: var(--app-color-surface-success);
+	color: var(--app-color-surface-success-foreground);
+}
+.resume[data-state="gap"] {
+	background: var(--app-color-surface-warning);
+	color: var(--app-color-surface-warning-foreground);
+}
+
+/* ----------------------------------------------------------------- sidebar */
+
+.sidebar {
+	grid-area: sidebar;
+	display: flex;
+	flex-direction: column;
+	gap: 1.2rem;
+	min-height: 0;
+	overflow-y: auto;
+}
+.rooms {
+	display: grid;
+	gap: 0.3rem;
+}
+.rooms button {
+	text-align: left;
+	border-color: transparent;
+	background: transparent;
+}
+.rooms button:hover:not(:disabled) {
+	background: var(--app-color-muted);
+}
+.rooms button[aria-pressed="true"] {
+	background: var(--app-color-primary);
+	color: var(--app-color-primary-foreground);
+	border-color: transparent;
+}
+
+.controls {
+	display: grid;
+	gap: 0.35rem;
+	align-content: start;
+}
+.controls h2 {
+	margin: 0 0 0.1rem;
+	font-size: 0.7rem;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--app-color-muted-foreground);
+}
+.controls .note {
+	margin: 0.4rem 0 0;
+	font-size: 0.7rem;
+	line-height: 1.55;
+	color: var(--app-color-muted-foreground);
+}
+
+/* -------------------------------------------------------------------- main */
+
+.main {
+	grid-area: main;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	gap: 0.5rem;
+}
+.log-wrap {
+	flex: 1 1 auto;
+	min-height: 0;
+	position: relative;
+	border: 1px solid var(--app-color-border);
+	border-radius: 0.5rem;
+	background: var(--app-color-surface);
+}
+.log {
+	list-style: none;
+	margin: 0;
+	padding: 0.6rem 0.7rem;
+	height: 100%;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	display: grid;
+	gap: 0.2rem;
+	align-content: start;
+	font-size: 0.85rem;
+}
+.empty {
+	position: absolute;
+	inset: 0;
+	margin: 0;
+	display: grid;
+	place-content: center;
+	color: var(--app-color-muted-foreground);
+	font-size: 0.85rem;
+	pointer-events: none;
+}
+
+.entry {
+	display: flex;
+	align-items: baseline;
+	gap: 0.4rem;
+	padding: 0.1rem 0;
+	line-height: 1.5;
+}
+.entry .who {
+	flex: none;
+	font-weight: 600;
+	color: var(--app-color-accent);
+	font-variant-numeric: tabular-nums;
+}
+.entry .who::after {
+	content: ":";
+	color: var(--app-color-muted-foreground);
+	font-weight: 400;
+}
+.entry .text {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.entry .meta {
+	flex: none;
+	display: flex;
+	gap: 0.4rem;
+	align-items: baseline;
+	font-size: 0.68rem;
+	color: var(--app-color-muted-foreground);
+	font-variant-numeric: tabular-nums;
+}
+/* The publish acknowledgement's recipient count. */
+.entry .ack {
+	color: var(--app-color-success);
+}
+
+/* "replayed" — arrived through Last-Event-ID rather than live. */
+.entry .tag {
+	flex: none;
+	font-size: 0.6rem;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	padding: 0.05rem 0.3rem;
+	border-radius: 0.2rem;
+	background: var(--app-color-surface-accent);
+	color: var(--app-color-surface-accent-foreground);
+}
+.entry.replayed .text {
+	color: var(--app-color-muted-foreground);
+}
+
+/* Severity, which is an application concept — see example/shared.ts. */
+.entry[data-kind="event"] .who,
+.entry[data-kind="system"] .who {
+	color: var(--app-color-muted-foreground);
+}
+.entry[data-level="success"] .text {
+	color: var(--app-color-success);
+}
+.entry[data-level="warn"] .text {
+	color: var(--app-color-warning);
+}
+.entry[data-level="error"] .text {
+	color: var(--app-color-destructive);
+}
+
+/* Operator comments — peer traffic, as opposed to a server push. */
+.entry[data-kind="comment"] .who {
+	color: var(--app-color-accent);
+}
+.entry[data-kind="comment"].own .who {
+	color: var(--app-color-primary);
+}
+
+/* Server-injected (from: null) that is not a pipeline event — i.e. curl. */
+.entry[data-kind="system"] {
+	padding: 0.2rem 0.45rem;
+	border-left: 3px solid var(--app-color-accent);
+	background: var(--app-color-surface-accent);
+	color: var(--app-color-surface-accent-foreground);
+	border-radius: 0.25rem;
+}
+
+/* Local-only lines: notes about pausing, failures, etc. */
+.entry[data-kind="notice"] {
+	font-size: 0.76rem;
+	color: var(--app-color-muted-foreground);
+	font-style: italic;
+}
+.entry[data-kind="error"] {
+	font-size: 0.78rem;
+	color: var(--app-color-destructive);
+}
+
+/* The resume boundary marker. */
+.entry[data-kind="divider"] {
+	margin: 0.35rem 0;
+	font-size: 0.68rem;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--app-color-muted-foreground);
+}
+.entry[data-kind="divider"] .text {
+	flex: 1 1 auto;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	white-space: nowrap;
+}
+.entry[data-kind="divider"] .text::after {
+	content: "";
+	flex: 1 1 auto;
+	border-top: 1px dashed var(--app-color-border);
+}
+
+.composer {
+	display: flex;
+	gap: 0.5rem;
+}
+.composer input {
+	flex: 1 1 auto;
+}
+
+.broadcast {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	font-size: 0.75rem;
+	color: var(--app-color-muted-foreground);
+}
+.broadcast em {
+	font-style: normal;
+	color: var(--app-color-foreground);
+}
+
+.room-label {
+	margin: 0;
+	font-size: 0.75rem;
+	color: var(--app-color-muted-foreground);
+}
+
+/* ------------------------------------------------------------------ narrow */
+
+@media (max-width: 44rem) {
+	.feed {
+		grid-template-columns: 1fr;
+		grid-template-rows: auto auto 1fr;
+		grid-template-areas:
+			"header"
+			"sidebar"
+			"main";
+	}
+	.sidebar {
+		flex-direction: row;
+		align-items: flex-start;
+		gap: 1rem;
+		overflow-x: auto;
+	}
+	.rooms {
+		grid-auto-flow: column;
+		grid-template-columns: none;
+	}
+	.controls {
+		grid-auto-flow: column;
+		align-items: start;
+	}
+	.controls h2,
+	.controls .note {
+		display: none;
+	}
+}
