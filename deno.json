@@ -1,6 +1,6 @@
 {
 	"name": "@marianmeres/sse",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"exports": {
 		".": "./src/mod.ts",
 		"./server": "./src/server.ts",
@@ -36,7 +36,13 @@
 		"@std/path": "jsr:@std/path@^1.1.6"
 	},
 	"publish": {
-		"exclude": [".*", "tests/**", "tmp/**", "example/**", "scripts/**"]
+		"exclude": [
+			".*",
+			"tests/**",
+			"tmp/**",
+			"example/**",
+			"scripts/**"
+		]
 	},
 	"exclude": [
 		"example/public/dist",
