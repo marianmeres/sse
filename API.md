@@ -2,18 +2,21 @@
 
 ## Entry points
 
-Three of them. Which one you import from decides what lands in your bundle.
+Four of them. Which one you import from decides what lands in your bundle.
 
-| Import                      | Contains                                           | Runtime               |
-| --------------------------- | -------------------------------------------------- | --------------------- |
-| `@marianmeres/sse`          | The client, plus everything in `/protocol`         | Anywhere; also on npm |
-| `@marianmeres/sse/server`   | The reference server                               | Deno only, JSR only   |
-| `@marianmeres/sse/protocol` | Wire definitions and typed errors, dependency-free | Anywhere; also on npm |
+| Import                            | Contains                                           | Runtime               |
+| --------------------------------- | -------------------------------------------------- | --------------------- |
+| `@marianmeres/sse`                | The client, plus everything in `/protocol`         | Anywhere; also on npm |
+| `@marianmeres/sse/server`         | The reference server                               | Deno only, JSR only   |
+| `@marianmeres/sse/protocol`       | Wire definitions and typed errors, dependency-free | Anywhere; also on npm |
+| `@marianmeres/sse/adapters/redis` | Redis cross-instance fan-out adapter               | Deno only, JSR only   |
 
 `/server` pulls in `@marianmeres/demino`, which is JSR-only — that is the whole
 reason it is a separate entry point rather than part of the root. `/protocol` is
 a strict subset of the root, exported separately for third-party implementations
-that want the wire types without the client.
+that want the wire types without the client. `/adapters/redis` is separate so a
+single-instance server never carries Redis-flavoured code; it is structural over
+`RedisLike` and depends on no concrete Redis library.
 
 ## Functions
 
@@ -51,21 +54,22 @@ Creates the reference server. Import from `@marianmeres/sse/server` (JSR only).
 
 **Parameters**
 
-| Name                        | Type                                   | Default                    | Description                                                                   |
-| --------------------------- | -------------------------------------- | -------------------------- | ----------------------------------------------------------------------------- |
-| `mountPath`                 | `string`                               | `"/sse"`                   | Demino mount path                                                             |
-| `middlewares`               | `DeminoHandler[]`                      | `[]`                       | Applied to all routes                                                         |
-| `options.verify`            | `(payload, req) => AuthResult \| null` | —                          | Return `null` (or throw) to reject with `401`. Absent means no authentication |
-| `options.allowBroadcast`    | `(ctx, room) => boolean`               | **deny**                   | Gate for cross-namespace broadcast                                            |
-| `options.httpAuth`          | `DeminoHandler`                        | —                          | Guards the injection routes. **Without it they are not mounted**              |
-| `options.deminoOptions`     | `DeminoOptions`                        | —                          | Passed through to `demino()`                                                  |
-| `options.heartbeatInterval` | `number`                               | `15_000`                   | Liveness beat cadence. `0` disables                                           |
-| `options.retryInterval`     | `number`                               | `3_000`                    | Base for the SSE `retry:` field, jittered ±50% per connection                 |
-| `options.replayBufferSize`  | `number`                               | `500`                      | Messages retained for replay. `0` disables replay                             |
-| `options.maxRoomNameLength` | `number`                               | `256`                      | Reject longer room names                                                      |
-| `options.maxRoomsPerClient` | `number`                               | `100`                      | Reject subscriptions beyond this many rooms                                   |
-| `options.adapter`           | `SSEPubSubAdapter`                     | `SSEPubSubLocal`           | Cross-instance fan-out                                                        |
-| `options.logger`            | `Logger \| null`                       | `createClog("sse:server")` | `null` silences                                                               |
+| Name                        | Type                                   | Default                    | Description                                                                                                                                                                                                                    |
+| --------------------------- | -------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `mountPath`                 | `string`                               | `"/sse"`                   | Demino mount path                                                                                                                                                                                                              |
+| `middlewares`               | `DeminoHandler[]`                      | `[]`                       | Applied to all routes                                                                                                                                                                                                          |
+| `options.verify`            | `(payload, req) => AuthResult \| null` | —                          | Return `null` (or throw) to reject with `401`. Absent means no authentication                                                                                                                                                  |
+| `options.allowBroadcast`    | `(ctx, room) => boolean`               | **deny**                   | Gate for cross-namespace broadcast                                                                                                                                                                                             |
+| `options.httpAuth`          | `DeminoHandler`                        | —                          | Guards the injection routes. **Without it they are not mounted**                                                                                                                                                               |
+| `options.deminoOptions`     | `DeminoOptions`                        | —                          | Passed through to `demino()`                                                                                                                                                                                                   |
+| `options.heartbeatInterval` | `number`                               | `15_000`                   | Liveness beat cadence. `0` disables                                                                                                                                                                                            |
+| `options.retryInterval`     | `number`                               | `3_000`                    | Base for the SSE `retry:` field, jittered ±50% per connection                                                                                                                                                                  |
+| `options.replayBufferSize`  | `number`                               | `500`                      | Messages retained for replay. `0` disables replay                                                                                                                                                                              |
+| `options.maxRoomNameLength` | `number`                               | `256`                      | Reject longer room names                                                                                                                                                                                                       |
+| `options.maxRoomsPerClient` | `number`                               | `100`                      | Reject subscriptions beyond this many rooms                                                                                                                                                                                    |
+| `options.adapter`           | `SSEPubSubAdapter`                     | `SSEPubSubLocal`           | Cross-instance fan-out                                                                                                                                                                                                         |
+| `options.logger`            | `Logger \| null`                       | `createClog("sse:server")` | `null` silences                                                                                                                                                                                                                |
+| `options.service`           | `SSEService`                           | —                          | Mount over a pre-built service; the caller keeps ownership, `close()` included. **Combining it with any service option above throws** — configure the service where it is constructed (`httpAuth`/`deminoOptions` still apply) |
 
 **Returns** `{ app: Demino, service: SSEService }`
 
@@ -325,10 +329,14 @@ close(): Promise<void>
 ```
 
 Local delivery is always the service's job; an adapter only propagates to peer
-instances. Only `SSEPubSubLocal` (a no-op — no peers to tell, nothing ever
-arrives) ships today, and it is the default. Because a peer's message enters the
-local replay buffer with _this_ instance's sequence numbers, replay stays
-instance-local under any adapter.
+instances. Two ship: `SSEPubSubLocal` (a no-op — no peers to tell, nothing ever
+arrives), which is the default, and `SSEPubSubRedis` (below). Because a peer's
+message enters the local replay buffer with _this_ instance's sequence numbers,
+replay stays instance-local under any adapter.
+
+An adapter must suppress its own echo: the envelope carries no origin field and
+the service does no dedup, so a frame that comes back to its publisher would be
+delivered twice.
 
 ### `SSEBroadcastEnvelope`
 
@@ -341,6 +349,59 @@ instance-local under any adapter.
 
 What crosses the instance boundary, in both directions. `namespace` is `null`
 for a cross-namespace broadcast.
+
+### `SSEPubSubRedis`
+
+Import from `@marianmeres/sse/adapters/redis` (JSR only).
+
+```typescript
+new SSEPubSubRedis(options: SSEPubSubRedisOptions)
+
+init(): Promise<void>                    // connect + subscribe; await BEFORE new SSEService(...)
+publish(envelope): Promise<void>         // seam contract
+onRemote(cb): () => void                 // seam contract
+close(): Promise<void>                   // destroys BOTH connections; idempotent
+origin: string                           // this instance's identity on the wire
+logger: Logger | null                    // assignable
+```
+
+**`SSEPubSubRedisOptions`**
+
+| Name      | Type             | Default                   | Description                                                                                                                              |
+| --------- | ---------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `client`  | `RedisLike`      | — **required**            | A **dedicated** Redis client — the adapter takes ownership, `duplicate()`s it for the subscriber connection, and `close()` destroys both |
+| `channel` | `string`         | `"sse"`                   | The one pub/sub channel all peer instances share. Give each app its own                                                                  |
+| `logger`  | `Logger \| null` | `createClog("sse:redis")` | `null` silences                                                                                                                          |
+
+`RedisLike` is a structural slice of a Redis client (`isOpen`, `connect`,
+`duplicate`, `publish`, `subscribe`, `destroy`, optional `on`) — `npm:redis` v6
+satisfies it as-is, and the package takes no dependency on it. When the client
+exposes `on()`, `init()` attaches an `"error"` listener to both connections —
+a node-redis client emitting a socket error with no listener crashes the whole
+process, and nobody but the adapter can ever reach the internally duplicated
+subscriber.
+
+All instances share a single channel; frames are
+`{ origin, envelope: SSEBroadcastEnvelope }` and the adapter skips frames whose
+`origin` is its own — Redis pub/sub delivers to every subscriber including the
+publisher's, and local delivery has already happened. Non-JSON or foreign-shaped
+frames on the channel are logged and dropped. Delivery is fire-and-forget,
+at-most-once across instances; reconnect behaviour is whatever the injected
+client does (node-redis reconnects and resubscribes on its own).
+
+```typescript
+import { createClient } from "npm:redis";
+import { SSEPubSubRedis } from "@marianmeres/sse/adapters/redis";
+import { createSSEApp } from "@marianmeres/sse/server";
+
+const adapter = new SSEPubSubRedis({
+	client: createClient({ url: "redis://localhost:6379" }),
+	channel: "myapp",
+});
+await adapter.init();
+
+const { app, service } = createSSEApp("/sse", [], { adapter });
+```
 
 ### `ReplayBuffer`
 

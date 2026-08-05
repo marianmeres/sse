@@ -9,21 +9,22 @@ demino-mountable reference server.
 name: "@marianmeres/sse"
 runtime: "deno (primary), browser/node/bun (client)"
 entry: "./src/mod.ts"
-exports: [".", "./server", "./protocol"]
+exports: [".", "./server", "./protocol", "./adapters/redis"]
 test: "deno task test"
 check: "deno task check" # lint + fmt + type check + deno doc --lint
 ```
 
-| Task                     | File                       | Key symbol                     |
-| ------------------------ | -------------------------- | ------------------------------ |
-| Client                   | `src/client/sse-client.ts` | `createSSEClient`, `SSEClient` |
-| Reconnect curve          | `src/client/backoff.ts`    | `backoffDelay`                 |
-| Room refcounting         | `src/client/rooms.ts`      | `RoomRegistry`                 |
-| Silent-stream detection  | `src/client/staleness.ts`  | `StalenessWatchdog`            |
-| Server factory           | `src/server/mod.ts`        | `createSSEApp`                 |
-| Streams, rooms, delivery | `src/server/service.ts`    | `SSEService`, `sseFrame`       |
-| Replay window            | `src/server/replay.ts`     | `ReplayBuffer`, `parseEventId` |
-| Wire definitions         | `src/protocol/*`           | `SSEMessage`, `ClientOp`, `OP` |
+| Task                     | File                           | Key symbol                     |
+| ------------------------ | ------------------------------ | ------------------------------ |
+| Client                   | `src/client/sse-client.ts`     | `createSSEClient`, `SSEClient` |
+| Reconnect curve          | `src/client/backoff.ts`        | `backoffDelay`                 |
+| Room refcounting         | `src/client/rooms.ts`          | `RoomRegistry`                 |
+| Silent-stream detection  | `src/client/staleness.ts`      | `StalenessWatchdog`            |
+| Server factory           | `src/server/mod.ts`            | `createSSEApp`                 |
+| Streams, rooms, delivery | `src/server/service.ts`        | `SSEService`, `sseFrame`       |
+| Replay window            | `src/server/replay.ts`         | `ReplayBuffer`, `parseEventId` |
+| Redis fan-out            | `src/server/adapters/redis.ts` | `SSEPubSubRedis`, `RedisLike`  |
+| Wire definitions         | `src/protocol/*`               | `SSEMessage`, `ClientOp`, `OP` |
 
 `RoomRegistry` and `StalenessWatchdog` are internal — exported from their
 modules, but deliberately not re-exported from `src/mod.ts`.
@@ -35,18 +36,22 @@ src/
 ├── mod.ts                 # client entry — browser safe, no demino
 ├── server.ts              # ./server entry  -> server/mod.ts
 ├── protocol.ts            # ./protocol entry -> protocol/mod.ts
+├── adapters/
+│   └── redis.ts           # ./adapters/redis entry -> server/adapters/redis.ts
 ├── protocol/              # dependency-free; imported by BOTH sides
 │   ├── constants.ts       # PROTOCOL_VERSION, SSE_EVENT, OP, ERROR_CODE
 │   ├── frames.ts          # SSEMessage, SSEHello, ClientOp, RpcResult
 │   └── errors.ts          # typed errors
 ├── client/
 └── server/
-    └── adapters/          # cross-instance fan-out seam (local only today)
+    └── adapters/          # cross-instance fan-out seam (local + redis)
 ```
 
-`src/server.ts` and `src/protocol.ts` exist because the npm build maps subpath
-exports to `src/{name}.ts`. Do not inline them away — they also carry the
-`@module` docs JSR renders as each subpath's landing page.
+`src/server.ts`, `src/protocol.ts` and `src/adapters/redis.ts` exist because
+the npm build maps subpath exports to `src/{name}.ts`. Do not inline them away
+— they also carry the `@module` docs JSR renders as each subpath's landing
+page. `./adapters/redis` is JSR-only (like `./server`) and deliberately a
+separate entry: importing the server must not drag Redis-flavoured code in.
 
 ## Critical Conventions
 
@@ -108,15 +113,26 @@ dead stream cancels the reconnect that replaced it.
 works while the stream is down, so there is no dead socket for a send to ride.
 Adding a queue here would be cargo-culting `@marianmeres/ws`.
 
+**An adapter must suppress its own echo.** The seam envelope has no origin
+field and `SSEService` does no dedup — local delivery has already happened when
+`publish()` is called, so an adapter that lets its own frame come back
+double-delivers. `SSEPubSubRedis` stamps an `origin` id on the wire and skips
+it on receipt; any new adapter must do the equivalent. The adapter must also be
+listening _before_ the service is constructed (`onRemote` is wired
+synchronously in the constructor) — hence `await adapter.init()` first.
+
 ## Before Making Changes
 
-1. `deno task test` — 135 tests against a real `Deno.serve` and Deno's global
-   `EventSource`
+1. `deno task test` — 154 tests against a real `Deno.serve` and Deno's global
+   `EventSource`. Two of them run against a live Redis and are skipped unless
+   `TEST_REDIS_URL` is set (e.g. `redis://localhost:6379/13`)
 2. `deno task check` — lint, fmt, type check, **and `deno doc --lint`**
 3. Touching the wire? Update `src/protocol/` first, then both sides
 4. Touching reconnect, replay or the probe? Read `tests/resilience.test.ts`
    first — those tests encode the failure modes the design exists to handle
-5. Touching error branches or the adapter seam? `tests/edge.test.ts`
+5. Touching error branches or the adapter seam? `tests/edge.test.ts`; the
+   Redis adapter's contract lives in `tests/redis-adapter.test.ts` (in-memory
+   fake) and `tests/redis-live.test.ts` (real wire)
 6. `deno task npm:build` if packaging changed (npm ships the **client only**;
    the server needs `demino`, which is JSR-only, and is excluded via
    `sourceFiles`)
@@ -132,9 +148,10 @@ the two checks it bundles:
   `@param` tags does **not** count — `deno doc --lint` wants a leading
   description sentence, which is the one that trips constructors.
 
-Also: every entry point (`src/mod.ts`, `src/server.ts`, `src/protocol.ts`)
-carries a `@module` doc with a usage `@example`. That is what renders as the
-package landing page on jsr.io, so treat it as the front door, not a comment.
+Also: every entry point (`src/mod.ts`, `src/server.ts`, `src/protocol.ts`,
+`src/adapters/redis.ts`) carries a `@module` doc with a usage `@example`. That
+is what renders as the package landing page on jsr.io, so treat it as the
+front door, not a comment.
 
 `deno task rp` releases and publishes to both registries.
 
@@ -145,8 +162,9 @@ package landing page on jsr.io, so treat it as the front door, not a comment.
   balancer without sticky sessions, replay silently does nothing
 - `recipients` counts are instance-local; they stay that way under a
   distributed adapter
-- Only `SSEPubSubLocal` exists — Redis/Deno-KV adapters are an unimplemented
-  seam. Reference implementations exist in a private package and can be lifted
+- No Deno-KV adapter. Redis ships (`./adapters/redis`); a KV implementation for
+  the same seam existed in the predecessor (`stack-sse` git history) and can be
+  resurrected if a zero-infra multi-instance option is ever wanted
 - No presence (`@marianmeres/ws` has it)
 - No binary payloads — JSON text only
 - No rate limiting. A per-`clientId` cap would be theatre when the client mints

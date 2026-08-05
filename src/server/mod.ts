@@ -28,6 +28,7 @@ import {
 	type DeminoHandler,
 	type DeminoOptions,
 } from "@marianmeres/demino";
+import { SSEError } from "../protocol/errors.ts";
 import { SSEService, type SSEServiceOptions } from "./service.ts";
 
 export * from "./adapters/abstract.ts";
@@ -64,7 +65,33 @@ export interface SSEAppOptions extends SSEServiceOptions {
 	 * separately from the SSE `logger`.
 	 */
 	deminoOptions?: DeminoOptions;
+	/**
+	 * A pre-built service to mount the routes over, instead of constructing
+	 * one here.
+	 *
+	 * For setups where the service must exist before — or independently of —
+	 * the app: built at infrastructure time, handed to request middlewares,
+	 * mounted later. Configure the service where you construct it — combining
+	 * `service` with any {@link SSEServiceOptions} field **throws**, because
+	 * silently ignoring, say, a `verify` or an `adapter` is exactly the kind
+	 * of trap that ships unauthenticated. `httpAuth` and `deminoOptions` still
+	 * apply. The caller keeps ownership, `close()` included.
+	 */
+	service?: SSEService;
 }
+
+/** The option keys that configure a service — invalid alongside `service`. */
+const SERVICE_OPTION_KEYS: readonly (keyof SSEServiceOptions)[] = [
+	"verify",
+	"allowBroadcast",
+	"heartbeatInterval",
+	"retryInterval",
+	"replayBufferSize",
+	"maxRoomNameLength",
+	"maxRoomsPerClient",
+	"adapter",
+	"logger",
+];
 
 /** What {@link createSSEApp} returns. */
 export interface SSEApp {
@@ -93,7 +120,17 @@ export function createSSEApp(
 	middlewares: DeminoHandler[] = [],
 	options: SSEAppOptions = {},
 ): SSEApp {
-	const service = new SSEService(options);
+	if (options.service) {
+		const clashing = SERVICE_OPTION_KEYS.filter((k) => options[k] !== undefined);
+		if (clashing.length) {
+			throw new SSEError(
+				`createSSEApp: 'service' cannot be combined with service options ` +
+					`(${clashing.join(", ")}) — they would be silently ignored; ` +
+					`configure them where the service is constructed`,
+			);
+		}
+	}
+	const service = options.service ?? new SSEService(options);
 	const app = demino(mountPath, middlewares, options.deminoOptions);
 	const { httpAuth } = options;
 

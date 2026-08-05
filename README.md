@@ -21,6 +21,8 @@ mountable reference server implementing the same protocol.
 - **No send queue to reason about** — publishing is an ordinary HTTP request
   that works whether or not the stream is up
 - **Acknowledged publishes** — `publish()` resolves with a recipient count
+- **Scales past one instance** — a Redis fan-out adapter ships as
+  `@marianmeres/sse/adapters/redis`, structural over your own Redis client
 - **Runs everywhere** — `EventSource` is a global in browsers, Deno, Node 22+
   and Bun, so there is no polyfill and no transport dependency
 - **Svelte-store compatible** reactive connection state
@@ -140,6 +142,30 @@ Mounted routes, relative to the mount path:
 | POST   | `/publish/[namespace]/[room]` | Requires `httpAuth`, else **not mounted** |
 | POST   | `/broadcast/[room]`           | Requires `httpAuth`, else **not mounted** |
 
+### More than one instance
+
+One process needs nothing. For a fleet, give each instance the Redis adapter
+and they gossip over a shared pub/sub channel — bring your own client
+(`npm:redis` v6 fits as-is; the package takes no Redis dependency):
+
+```typescript
+import { createClient } from "npm:redis";
+import { SSEPubSubRedis } from "@marianmeres/sse/adapters/redis";
+import { createSSEApp } from "@marianmeres/sse/server";
+
+const adapter = new SSEPubSubRedis({
+	// a dedicated client — the adapter takes ownership of it
+	client: createClient({ url: "redis://localhost:6379" }),
+	channel: "myapp",
+});
+await adapter.init();
+
+const { app, service } = createSSEApp("/sse", [], { adapter });
+```
+
+Replay and `recipients` counts stay instance-local by design — see
+"Behaviour worth knowing".
+
 ## Concepts
 
 **Namespace** — the isolation boundary. Clients in different namespaces can
@@ -162,7 +188,9 @@ that minted them. A client that reconnects to a _different_ instance is
 correctly told to start live rather than replaying someone else's sequence
 numbers — so a multi-instance deployment without a shared adapter quietly
 degrades to at-most-once. `hello` reports `resumed` and `gap` so an application
-can refetch when it matters.
+can refetch when it matters. `recipients` counts are instance-local too: a
+publish resolves with the count on the answering instance only, whatever
+happens on its peers.
 
 **The reconnect loop is mostly the browser's.** `EventSource` retries on its
 own, paced by the `retry:` value the server sends — jittered per connection so

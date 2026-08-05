@@ -161,9 +161,13 @@ alive. Here, client disconnect fires `request.signal`'s `abort`, and a write to
 a dead stream throws — both are handled, and between them there is nothing left
 for a sweeper to find.
 
-### Local adapter only
+### Adapters: local by default, Redis when there are peers
 
-`SSEPubSubAdapter` is defined; `SSEPubSubLocal` is the only implementation. The
-seam exists so a Redis or Deno-KV adapter can drop in later without a breaking
-change — reference implementations exist in a private package and can be lifted
-against the finished protocol.
+`SSEPubSubAdapter` is the cross-instance seam; `SSEPubSubLocal` (a no-op) is
+the default and `SSEPubSubRedis` ships as its own entry point,
+`@marianmeres/sse/adapters/redis` — a separate entry so a single-instance
+server never carries Redis-flavoured code, and structural over `RedisLike` so
+the package still depends on no concrete Redis library. The seam's division of
+labour holds under both: local delivery is always the service's job, an adapter
+only gossips to peers and must suppress its own echo. A Deno-KV adapter for
+the same seam remains unimplemented.

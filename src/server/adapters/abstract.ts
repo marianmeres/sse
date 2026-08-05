@@ -1,8 +1,9 @@
 /**
  * Cross-instance fan-out seam.
  *
- * The v1 server is in-memory and single-instance. This interface exists so a
- * Redis or Deno-KV adapter can drop in later without a breaking change.
+ * Two implementations ship: {@link SSEPubSubLocal} (the default — no peers)
+ * and `SSEPubSubRedis` (`@marianmeres/sse/adapters/redis`). The interface is
+ * what lets further adapters drop in without a breaking change.
  *
  * Note the division of labour: **local delivery is the service's job**, always.
  * An adapter only propagates to *peer* instances and receives what peers send.
