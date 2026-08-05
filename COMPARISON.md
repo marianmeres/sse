@@ -100,8 +100,7 @@ Both packages agree on the things worth agreeing on:
 
 - **Payload is opaque.** The protocol owns a closed set of event/frame types;
   `payload` is never inspected or mutated. Your payload may have its own `type`
-  field and nothing collides. (Their shared predecessor, `stack-sse`, conflated
-  the two and had to `delete message.payload.type` to compensate.)
+  field and nothing collides.
 - **`protocol/` is a dependency-free module** both sides import, exported as a
   subpath so a third-party implementation can use it.
 - **Safe defaults are deny.** `allowBroadcast` denies; the HTTP injection

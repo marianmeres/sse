@@ -207,7 +207,8 @@ a gap instead. See [example/README.md](example/README.md).
 
 ## API
 
-See [API.md](API.md) for complete API documentation.
+See [API.md](API.md) for complete API documentation, and
+[docs/DESIGN.md](docs/DESIGN.md) for why the design is what it is.
 
 ## License
 

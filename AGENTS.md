@@ -51,8 +51,8 @@ exports to `src/{name}.ts`. Do not inline them away — they also carry the
 ## Critical Conventions
 
 **Protocol type is not application type.** The protocol owns a closed set of
-event names; `payload` is opaque and must never be inspected or mutated. The
-predecessor (`stack-sse`) conflated them and had to `delete message.payload.type`
+event names; `payload` is opaque and must never be inspected or mutated. An
+earlier implementation conflated them and had to `delete message.payload.type`
 to compensate — do not reintroduce that.
 
 **`protocol/` is the single source of truth.** Both sides import it. Changing a
@@ -88,7 +88,7 @@ only patches up subscriptions that changed _while_ the stream was connecting.
 
 **Heartbeats must be real events, never `:` comments.** `EventSource` does not
 expose comments to JavaScript, so a comment heartbeat cannot drive staleness
-detection. `stack-sse` got this wrong.
+detection.
 
 **Only `message` events carry an `id:`.** `hello` and `heartbeat` must not, or
 `Last-Event-ID` would stop pointing at the last real message.
@@ -146,7 +146,7 @@ package landing page on jsr.io, so treat it as the front door, not a comment.
 - `recipients` counts are instance-local; they stay that way under a
   distributed adapter
 - Only `SSEPubSubLocal` exists — Redis/Deno-KV adapters are an unimplemented
-  seam. `@marianmeres/stack-sse` has working versions to lift
+  seam. Reference implementations exist in a private package and can be lifted
 - No presence (`@marianmeres/ws` has it)
 - No binary payloads — JSON text only
 - No rate limiting. A per-`clientId` cap would be theatre when the client mints
@@ -160,15 +160,18 @@ package landing page on jsr.io, so treat it as the front door, not a comment.
 
 ## Documentation Index
 
-| Document            | Purpose                                      |
-| ------------------- | -------------------------------------------- |
-| `README.md`         | Human-facing overview and usage              |
-| `API.md`            | Complete API reference and wire protocol     |
-| `COMPARISON.md`     | How this differs from `@marianmeres/ws`      |
-| `example/README.md` | Runnable reference app — `deno task example` |
+| Document            | Purpose                                        |
+| ------------------- | ---------------------------------------------- |
+| `README.md`         | Human-facing overview and usage                |
+| `API.md`            | Complete API reference and wire protocol       |
+| `COMPARISON.md`     | How this differs from `@marianmeres/ws`        |
+| `docs/DESIGN.md`    | Decision log — _why_ the conventions above are |
+| `example/README.md` | Runnable reference app — `deno task example`   |
 
-`tmp/` holds the design spec and decision log, but it is gitignored — do not
-expect it in a fresh clone, and do not link to it from published docs.
+`docs/DESIGN.md` is the reasoning behind the rules in "Critical Conventions" —
+read it before arguing with one of them. It is a decision log, not a reference;
+it deliberately does not restate the API, and where it disagrees with the code,
+the code wins.
 
 ## The Example
 
