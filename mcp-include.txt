@@ -1,0 +1,4 @@
+Server-Sent Events (SSE) client with namespaces, rooms and replay — reconnects resume via
+Last-Event-ID from a bounded server-side message window instead of losing messages.
+Includes a mountable reference server implementing the same protocol (server is JSR-only;
+client runs in browsers, Deno, Node 22+ and Bun on native EventSource).
