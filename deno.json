@@ -17,7 +17,7 @@
 		"example:theme": "deno run -A example/build-theme.ts",
 		"npm:build": "deno run -A scripts/build-npm.ts",
 		"npm:publish": "deno run -A scripts/build-npm.ts && cd ./.npm-dist && npm publish --access=public",
-		"release": "deno run -A jsr:@marianmeres/release",
+		"release": "deno run -A jsr:@marianmeres/release@^2.1.0 --before-commit \"deno task example:build\"",
 		"publish": "deno publish && deno task npm:publish",
 		"rp": "deno task release -y && deno task publish",
 		"rpm": "deno task release minor -y && deno task publish"
