@@ -17,14 +17,16 @@
 		"example:theme": "deno run -A example/build-theme.ts",
 		"npm:build": "deno run -A scripts/build-npm.ts",
 		"npm:publish": "deno run -A scripts/build-npm.ts && cd ./.npm-dist && npm publish --access=public",
+		"npm:publish:next": "deno run -A scripts/build-npm.ts && cd ./.npm-dist && npm publish --access=public --tag next",
 		"release": "deno run -A jsr:@marianmeres/release@^2.1.0 --before-commit \"deno task example:build\"",
 		"publish": "deno publish && deno task npm:publish",
+		"publish:next": "deno publish && deno task npm:publish:next",
 		"rp": "deno task release -y && deno task publish",
 		"rpm": "deno task release minor -y && deno task publish"
 	},
 	"imports": {
 		"@marianmeres/clog": "jsr:@marianmeres/clog@^3.21.0",
-		"@marianmeres/demino": "jsr:@marianmeres/demino@^1.17.0",
+		"@marianmeres/demino": "jsr:@marianmeres/demino@^2.0.0-rc.1",
 		"@marianmeres/design-tokens": "jsr:@marianmeres/design-tokens@^1.13.0",
 		"@marianmeres/npmbuild": "jsr:@marianmeres/npmbuild@^1.16.0",
 		"@marianmeres/pubsub": "jsr:@marianmeres/pubsub@^3.0.0",
