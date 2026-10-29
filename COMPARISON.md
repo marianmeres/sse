@@ -29,26 +29,26 @@ pretending otherwise — each leans into what its transport is good at.
 
 ## The differences
 
-|                           | `@marianmeres/ws`                                        | `@marianmeres/sse`                                                                                                  |
-| ------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| **Transport**             | One WebSocket, bidirectional                             | SSE stream down, HTTP `POST` up                                                                                     |
-| **Delivery guarantee**    | At-most-once, always                                     | Nothing lost on a reconnect inside the replay window, on one instance; at-most-once otherwise                       |
-| **Resume**                | None                                                     | `Last-Event-ID`, resent by the browser for free                                                                     |
-| **Reconnect loop**        | Entirely the client's, exponential backoff with jitter   | `EventSource`'s own, paced by a server-sent jittered `retry:`. The client takes over only after a permanent failure |
-| **Presence**              | Yes — `sync`/`join`/`leave`, opt-in per room             | No                                                                                                                  |
-| **Offline send buffer**   | `Outbox` — capped, flushed after re-subscribe            | None. Publishing is an independent `POST` that works while the stream is down                                       |
-| **Auth**                  | One `auth` frame per connection                          | Every request, stream and upstream alike. `verify()` must be deterministic                                          |
-| **Auth transport**        | Anything — it is a frame payload                         | Cookie or query string for the stream (`EventSource` cannot set headers); `x-sse-auth` header upstream              |
-| **Failure vocabulary**    | Synthetic close codes (`4001`, `4003`, …)                | HTTP statuses (`401`, `403`, …)                                                                                     |
-| **Namespace default**     | `"default"`                                              | **Required** — no default                                                                                           |
-| **Liveness**              | Application-level ping/pong, both directions             | Server heartbeat event + client staleness watchdog. Receive-side only; there is no upstream channel to ping on      |
-| **Idle reaping**          | Server sweeps silent sockets                             | Not needed — `request.signal` and a failing write cover it                                                          |
-| **Binary payloads**       | Yes, via `encode`/`decode` hooks                         | No. JSON text only                                                                                                  |
-| **Re-subscribe ordering** | Load-bearing: re-subscribe must precede the outbox flush | Not a thing. Rooms ride the connect URL, so they are registered before the first byte                               |
-| **Server runtime**        | Deno only (`Deno.upgradeWebSocket`)                      | Deno only (`demino`), though the core is standard Web APIs                                                          |
-| **Client runtime**        | Everywhere (`WebSocket` is global)                       | Everywhere (`EventSource` is global)                                                                                |
-| **npm**                   | Client only                                              | Client only                                                                                                         |
-| **Source size**           | ~1800 lines of code                                      | ~1690 lines of code                                                                                                 |
+|                           | `@marianmeres/ws`                                          | `@marianmeres/sse`                                                                                                  |
+| ------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **Transport**             | One WebSocket, bidirectional                               | SSE stream down, HTTP `POST` up                                                                                     |
+| **Delivery guarantee**    | At-most-once, always                                       | Nothing lost on a reconnect inside the replay window, on one instance; at-most-once otherwise                       |
+| **Resume**                | None                                                       | `Last-Event-ID`, resent by the browser for free                                                                     |
+| **Reconnect loop**        | Entirely the client's, exponential backoff with jitter     | `EventSource`'s own, paced by a server-sent jittered `retry:`. The client takes over only after a permanent failure |
+| **Presence**              | Yes — `sync`/`join`/`leave`, opt-in per room               | No                                                                                                                  |
+| **Offline send buffer**   | `Outbox` — capped, flushed after re-subscribe              | None. Publishing is an independent `POST` that works while the stream is down                                       |
+| **Auth**                  | One `auth` frame per connection                            | Every request, stream and upstream alike. `verify()` must be deterministic                                          |
+| **Auth transport**        | Anything — it is a frame payload                           | Cookie or query string for the stream (`EventSource` cannot set headers); `x-sse-auth` header upstream              |
+| **Failure vocabulary**    | Synthetic close codes (`4001`, `4003`, …)                  | HTTP statuses (`401`, `403`, …)                                                                                     |
+| **Namespace default**     | `"default"`                                                | **Required** — no default                                                                                           |
+| **Liveness**              | Application-level ping/pong, both directions               | Server heartbeat event + client staleness watchdog. Receive-side only; there is no upstream channel to ping on      |
+| **Idle reaping**          | Server sweeps silent sockets                               | Not needed — `request.signal` and a failing write cover it                                                          |
+| **Binary payloads**       | Yes, via `encode`/`decode` hooks                           | No. JSON text only                                                                                                  |
+| **Re-subscribe ordering** | Load-bearing: re-subscribe must precede the outbox flush   | Not a thing. Rooms ride the connect URL, so they are registered before the first byte                               |
+| **Server runtime**        | Any demino 2.0 adapter (Deno; Node + `ws`) since ws 0.8.0  | Any demino 2.0 adapter; the core is standard Web APIs                                                               |
+| **Client runtime**        | Everywhere (`WebSocket` is global)                         | Everywhere (`EventSource` is global)                                                                                |
+| **npm**                   | Client and server since ws 0.8.0 (demino an optional peer) | Client only; the server is on JSR                                                                                   |
+| **Source size**           | ~1800 lines of code                                        | ~1690 lines of code                                                                                                 |
 
 ## Where the APIs differ
 

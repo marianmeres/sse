@@ -37,10 +37,9 @@ npm install @marianmeres/sse
 deno add jsr:@marianmeres/sse
 ```
 
-> **npm ships the client only.** The reference server depends on
-> `@marianmeres/demino`, which is JSR-only, so it exists solely as
-> `jsr:@marianmeres/sse/server`. The client is fully runtime-agnostic, so npm
-> consumers lose nothing they could have used.
+> **npm ships the client only.** The reference server and the Redis adapter are
+> published on JSR only (`jsr:@marianmeres/sse/server`). They use no Deno API
+> and run under any demino 2.0 adapter. The client is fully runtime-agnostic.
 
 ## ws or sse?
 

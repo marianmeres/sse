@@ -1,8 +1,8 @@
 /**
  * Reference server — a demino app implementing the wire protocol.
  *
- * Deno-first because `demino` is JSR-only. Import it from
- * `@marianmeres/sse/server` so `demino` never reaches a browser bundle.
+ * Import it from `@marianmeres/sse/server` so `demino` never reaches a browser
+ * bundle. It uses no Deno API: any demino 2.0 adapter serves it.
  *
  * @example
  * ```ts

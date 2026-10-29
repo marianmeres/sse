@@ -2,13 +2,14 @@
  * `@marianmeres/sse/server` — the reference SSE server, a demino app
  * implementing the wire protocol.
  *
- * Deno-first and **JSR-only**, because `demino` is: this is why the server sits
- * behind its own entry point rather than in the root, so `demino` never reaches
- * a browser bundle and the npm build can ship the client alone.
+ * A demino app, which is why it sits behind its own entry point rather than in
+ * the root: `demino` never reaches a browser bundle, and the npm build ships the
+ * client alone (this entry is JSR-only). It uses no Deno API — any demino 2.0
+ * adapter serves it (`@marianmeres/demino/deno`, or `/node`).
  *
  * `createSSEApp` is the mountable app; `SSEService` underneath it owns every
  * stream, the room index and the replay buffer, and is usable standalone from
- * any `Deno.serve` handler.
+ * any `(req) => Response` handler.
  *
  * @example
  * ```ts

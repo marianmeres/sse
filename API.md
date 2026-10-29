@@ -4,19 +4,21 @@
 
 Four of them. Which one you import from decides what lands in your bundle.
 
-| Import                            | Contains                                           | Runtime               |
-| --------------------------------- | -------------------------------------------------- | --------------------- |
-| `@marianmeres/sse`                | The client, plus everything in `/protocol`         | Anywhere; also on npm |
-| `@marianmeres/sse/server`         | The reference server                               | Deno only, JSR only   |
-| `@marianmeres/sse/protocol`       | Wire definitions and typed errors, dependency-free | Anywhere; also on npm |
-| `@marianmeres/sse/adapters/redis` | Redis cross-instance fan-out adapter               | Deno only, JSR only   |
+| Import                            | Contains                                           | Runtime                       |
+| --------------------------------- | -------------------------------------------------- | ----------------------------- |
+| `@marianmeres/sse`                | The client, plus everything in `/protocol`         | Anywhere; also on npm         |
+| `@marianmeres/sse/server`         | The reference server                               | Any demino 2.0 host; JSR only |
+| `@marianmeres/sse/protocol`       | Wire definitions and typed errors, dependency-free | Anywhere; also on npm         |
+| `@marianmeres/sse/adapters/redis` | Redis cross-instance fan-out adapter               | Any demino 2.0 host; JSR only |
 
-`/server` pulls in `@marianmeres/demino`, which is JSR-only — that is the whole
-reason it is a separate entry point rather than part of the root. `/protocol` is
-a strict subset of the root, exported separately for third-party implementations
-that want the wire types without the client. `/adapters/redis` is separate so a
-single-instance server never carries Redis-flavoured code; it is structural over
-`RedisLike` and depends on no concrete Redis library.
+`/server` pulls in `@marianmeres/demino` — that is the whole reason it is a
+separate entry point rather than part of the root: a client bundle never carries
+a server framework. The server uses no Deno API, so any demino 2.0 adapter serves
+it (`@marianmeres/demino/deno`, or `/node`); it is published on JSR only.
+`/protocol` is a strict subset of the root, exported separately for third-party
+implementations that want the wire types without the client. `/adapters/redis`
+is separate so a single-instance server never carries Redis-flavoured code; it
+is structural over `RedisLike` and depends on no concrete Redis library.
 
 ## Functions
 

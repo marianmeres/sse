@@ -5,10 +5,11 @@ const denoJson = JSON.parse(Deno.readTextFileSync("deno.json"));
 /**
  * The npm package ships the **client only**.
  *
- * The reference server depends on `@marianmeres/demino`, which is published to
- * JSR and not to npm, so there is nothing coherent to publish for Node.
- * Shipping a subpath that cannot resolve would be worse than not shipping it:
- * `jsr:@marianmeres/sse/server` remains the one way to get it.
+ * The reference server and the Redis adapter are left out. They need
+ * `@marianmeres/demino` (on npm since 2.0), and shipping them means declaring
+ * it an optional peer and smoke-testing the server on Node, as
+ * `@marianmeres/ws` does — not done yet. `jsr:@marianmeres/sse/server` remains
+ * the way to get it.
  *
  * The client itself is runtime-agnostic (`EventSource` is a global in
  * browsers, Deno, Node 22+ and Bun), so npm consumers lose nothing they could

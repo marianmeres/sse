@@ -134,8 +134,10 @@ synchronously in the constructor) — hence `await adapter.init()` first.
    Redis adapter's contract lives in `tests/redis-adapter.test.ts` (in-memory
    fake) and `tests/redis-live.test.ts` (real wire)
 6. `deno task npm:build` if packaging changed (npm ships the **client only**;
-   the server needs `demino`, which is JSR-only, and is excluded via
-   `sourceFiles`)
+   the server and the Redis adapter are left out via `sourceFiles` — a
+   packaging choice, not a runtime limit: they need demino, which is on npm
+   since 2.0, but shipping them means an optional peer and a Node smoke, as
+   `@marianmeres/ws` does)
 
 ## Publishing to JSR
 
@@ -174,7 +176,8 @@ front door, not a comment.
   wrong at fifty — that workload wants `@marianmeres/ws`
 - An SSE stream consumes one of the browser's ~6 per-origin HTTP/1.1
   connections. Non-issue over HTTP/2
-- Node/Bun cannot run the server (`demino` is JSR-only)
+- The server is JSR-only: a Node app cannot `npm install` it yet, although it
+  uses no Deno API and runs under demino 2.0's Node adapter
 
 ## Documentation Index
 

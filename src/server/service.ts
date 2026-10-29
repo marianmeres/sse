@@ -161,7 +161,7 @@ function fail(code: string, message: string, status: number): Response {
 /**
  * Owns every stream, the room index, the replay buffer and delivery.
  *
- * Usable standalone (drive it from any `Deno.serve` handler) or through
+ * Usable standalone (drive it from any `(req) => Response` handler) or through
  * `createSSEApp`, which mounts it as a demino app.
  */
 export class SSEService {
