@@ -1,6 +1,6 @@
 {
 	"name": "@marianmeres/sse",
-	"version": "1.0.0",
+	"version": "2.0.0-rc.1",
 	"exports": {
 		".": "./src/mod.ts",
 		"./server": "./src/server.ts",

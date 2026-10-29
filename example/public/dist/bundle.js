@@ -92,12 +92,16 @@ function fromTemplate(id) {
     if (!first) throw new Error(`Template #${id} has no element content`);
     return first.cloneNode(true);
 }
+function inScope(root, el) {
+    const scope = el.closest("[data-scope]");
+    return !scope || scope === root || !root.contains(scope);
+}
 function refs(root) {
     const map = {};
     const self = root;
     if (self.matches?.("[data-ref]")) map[self.dataset.ref] = self;
     root.querySelectorAll("[data-ref]").forEach((el)=>{
-        map[el.dataset.ref] = el;
+        if (inScope(root, el)) map[el.dataset.ref] = el;
     });
     return map;
 }
@@ -111,7 +115,9 @@ function applyBindings(root, data) {
         ...root.matches?.("[data-bind]") ? [
             root
         ] : [],
-        ...root.querySelectorAll("[data-bind]")
+        ...[
+            ...root.querySelectorAll("[data-bind]")
+        ].filter((el)=>inScope(root, el))
     ];
     targets.forEach((el)=>{
         el.dataset.bind.split(";").forEach((rule)=>{
@@ -149,13 +155,16 @@ function createView(mountFn) {
 function delegate(root, handlers) {
     const seen = new Set();
     const collect = (scope)=>scope.querySelectorAll("[data-on]").forEach((el)=>el.dataset.on.split(";").forEach((r)=>seen.add(r.split(":")[0].trim())));
+    if (root.matches?.("[data-on]")) {
+        root.dataset.on.split(";").forEach((r)=>seen.add(r.split(":")[0].trim()));
+    }
     collect(root);
     document.querySelectorAll("template").forEach((t)=>collect(t.content));
     const unsubs = [];
     seen.forEach((evt)=>{
         const listener = (e)=>{
             const el = e.target?.closest("[data-on]");
-            if (!el || !root.contains(el)) return;
+            if (!el || !root.contains(el) || !inScope(root, el)) return;
             el.dataset.on.split(";").forEach((rule)=>{
                 const [type, action] = rule.split(":").map((s)=>s.trim());
                 if (type === evt && handlers[action]) handlers[action](e, el);
@@ -352,6 +361,77 @@ function firstArgAsString(args, config) {
     if (concat || stringify) return stringifyValue(args[0]);
     return String(args[0] ?? "");
 }
+function _resolveMetaSource(src) {
+    if (!src) return undefined;
+    try {
+        return typeof src === "function" ? src() : src;
+    } catch  {
+        return undefined;
+    }
+}
+function _mergeMetaSources(sources) {
+    let out;
+    for (const src of sources){
+        const resolved = _resolveMetaSource(src);
+        if (resolved != null) out = Object.assign(out ?? {}, resolved);
+    }
+    return out;
+}
+const CORE_JSON_FIELDS = [
+    "timestamp",
+    "level",
+    "logger",
+    "message",
+    "meta",
+    "stack"
+];
+function _isReservedJsonKey(key, names) {
+    if (CORE_JSON_FIELDS.some((k)=>names[k] === key)) return true;
+    const prefix = `${names.arg}_`;
+    return key.startsWith(prefix) && /^\d+$/.test(key.slice(prefix.length));
+}
+function toJsonRecord(data) {
+    const { level, namespace, timestamp, config, stack } = data;
+    const args = _cleanStyledArgs(_stringifyArgs(data.args, config));
+    const fieldNames = {
+        ...DEFAULT_JSON_FIELD_NAMES,
+        ...GLOBAL.jsonFieldNames,
+        ...config?.jsonFieldNames
+    };
+    const meta = data.meta;
+    let promoted;
+    let rest;
+    const topLevelKeys = config?.jsonTopLevelMeta ?? GLOBAL.jsonTopLevelMeta;
+    if (meta && topLevelKeys?.length) {
+        for (const key of topLevelKeys){
+            if (!Object.hasOwn(meta, key) || meta[key] === undefined) continue;
+            if (_isReservedJsonKey(key, fieldNames)) continue;
+            rest ??= {
+                ...meta
+            };
+            (promoted ??= {})[key] = meta[key];
+            delete rest[key];
+        }
+    }
+    const writtenMeta = rest ? Object.keys(rest).length ? rest : undefined : meta;
+    const record = {
+        [fieldNames.timestamp]: timestamp,
+        [fieldNames.level]: level,
+        ...namespace ? {
+            [fieldNames.logger]: namespace
+        } : {},
+        [fieldNames.message]: args[0],
+        ...promoted,
+        ...writtenMeta && {
+            [fieldNames.meta]: writtenMeta
+        }
+    };
+    args.slice(1).forEach((arg, i)=>{
+        record[`${fieldNames.arg}_${i}`] = arg?.stack ?? arg;
+    });
+    if (stack && stack.length) record[fieldNames.stack] = formatStack(stack);
+    return record;
+}
 const CONSOLE_METHOD = {
     DEBUG: "debug",
     INFO: "log",
@@ -371,6 +451,10 @@ const defaultWriter = (data)=>{
         console[consoleMethod](output, ...stackStr ? [
             stackStr
         ] : []);
+        return;
+    }
+    if (runtime !== "browser" && (config?.jsonOutput ?? GLOBAL.jsonOutput)) {
+        console[consoleMethod](JSON.stringify(toJsonRecord(data)));
         return;
     }
     const processedArgs = _stringifyArgs(args, config);
@@ -400,31 +484,6 @@ const defaultWriter = (data)=>{
                 stackStr
             ] : []);
         }
-        return;
-    }
-    const useJson = config?.jsonOutput ?? GLOBAL.jsonOutput;
-    if (useJson) {
-        const fieldNames = {
-            ...DEFAULT_JSON_FIELD_NAMES,
-            ...GLOBAL.jsonFieldNames,
-            ...config?.jsonFieldNames
-        };
-        const output = {
-            [fieldNames.timestamp]: timestamp,
-            [fieldNames.level]: level,
-            ...namespace ? {
-                [fieldNames.logger]: namespace
-            } : {},
-            [fieldNames.message]: cleanedArgs[0],
-            ...data.meta && {
-                [fieldNames.meta]: data.meta
-            }
-        };
-        cleanedArgs.slice(1).forEach((arg, i)=>{
-            output[`${fieldNames.arg}_${i}`] = arg?.stack ?? arg;
-        });
-        if (stackStr) output[fieldNames.stack] = stackStr;
-        console[consoleMethod](JSON.stringify(output));
         return;
     }
     const prefix = `[${timestamp}] [${level}]${nsText ? ` ${nsText}` : ""}`.trim();
@@ -473,6 +532,7 @@ function createClog(namespace, config) {
     const _apply = (level, args)=>{
         const clonedArgs = args.slice();
         const getMetaFn = config?.getMeta ?? GLOBAL.getMeta;
+        const extraMeta = config?.meta;
         const stacktraceConfig = config?.stacktrace ?? GLOBAL.stacktrace;
         const stack = stacktraceConfig ? captureStackLines(typeof stacktraceConfig === "number" ? stacktraceConfig : undefined) : undefined;
         const data = {
@@ -483,18 +543,17 @@ function createClog(namespace, config) {
             config,
             stack
         };
-        if (getMetaFn) {
+        if (getMetaFn || extraMeta) {
             let _meta;
             let _metaComputed = false;
             Object.defineProperty(data, "meta", {
                 get () {
                     if (!_metaComputed) {
                         _metaComputed = true;
-                        try {
-                            _meta = getMetaFn();
-                        } catch  {
-                            _meta = undefined;
-                        }
+                        _meta = extraMeta ? _mergeMetaSources([
+                            getMetaFn,
+                            extraMeta
+                        ]) : _resolveMetaSource(getMetaFn);
                     }
                     return _meta;
                 },
@@ -541,6 +600,7 @@ createClog.reset = ()=>{
     createClog.global.writer = undefined;
     createClog.global.jsonOutput = false;
     createClog.global.jsonFieldNames = undefined;
+    createClog.global.jsonTopLevelMeta = undefined;
     createClog.global.debug = undefined;
     createClog.global.stringify = undefined;
     createClog.global.concat = undefined;
