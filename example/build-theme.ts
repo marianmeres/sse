@@ -10,11 +10,12 @@
  * Light lands on `:root`, dark on `:root.dark`, so switching modes is one class
  * on `<html>` and no stylesheet swapping.
  *
- * Run: `deno task example:theme` (the committed output is already current).
+ * Run: `pnpm run example:theme` (the committed output is already current).
  *
  * @module
  */
 
+import { writeFile } from "node:fs/promises";
 import { generateThemedCss } from "@marianmeres/design-tokens/reboot";
 import { getBundledTheme } from "@marianmeres/design-tokens/themes";
 
@@ -36,6 +37,6 @@ const css = `/*
 ` + generateThemedCss(schema, PREFIX, { prettierIgnore: true });
 
 const out = new URL("./public/theme.css", import.meta.url);
-await Deno.writeTextFile(out, css);
+await writeFile(out, css);
 
 console.log(`Wrote ${out.pathname} (theme "${THEME}", prefix "${PREFIX}").`);

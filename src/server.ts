@@ -3,9 +3,10 @@
  * implementing the wire protocol.
  *
  * A demino app, which is why it sits behind its own entry point rather than in
- * the root: `demino` never reaches a browser bundle, and the npm build ships the
- * client alone (this entry is JSR-only). It uses no Deno API — any demino 2.0
- * adapter serves it (`@marianmeres/demino/deno`, or `/node`).
+ * the root: `demino` never reaches a browser bundle, and on npm it is an
+ * optional peer dependency — install it alongside when you import this entry.
+ * It uses no runtime API of its own: any demino 2.0 adapter serves it
+ * (`@marianmeres/demino/node`, or `/deno`).
  *
  * `createSSEApp` is the mountable app; `SSEService` underneath it owns every
  * stream, the room index and the replay buffer, and is usable standalone from
@@ -13,6 +14,7 @@
  *
  * @example
  * ```ts
+ * import { serve } from "@marianmeres/demino/node";
  * import { createSSEApp } from "@marianmeres/sse/server";
  *
  * // Your own authentication — whatever turns a token into a user.
@@ -30,12 +32,13 @@
  * // Push to connected clients from anywhere in your app.
  * await service.publish("notifications", { text: "deploy finished" }, "org-123");
  *
- * Deno.serve(app);
+ * await serve(app, { port: 8000 });
  * ```
  *
  * @module
  */
 
-// Kept as a top-level file because the npm build maps subpath exports to
-// `src/{name}.ts`; the implementation lives in `./server/`.
+// Kept as a top-level file because every subpath export maps to a flat
+// `src/{name}.ts` (`dist/{name}.js` on npm); the implementation lives in
+// `./server/`.
 export * from "./server/mod.ts";

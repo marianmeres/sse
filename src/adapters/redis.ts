@@ -5,11 +5,12 @@
  * Redis-flavoured: import it only when you actually run more than one
  * instance. The adapter is structural over {@link RedisLike}, so this package
  * still depends on no concrete Redis library — bring your own client
- * (`npm:redis` v6 fits as-is). Like `/server`, this entry is JSR-only.
+ * (node-redis v6, `redis` on npm, fits as-is).
  *
  * @example
  * ```ts
- * import { createClient } from "npm:redis";
+ * import { serve } from "@marianmeres/demino/node";
+ * import { createClient } from "redis";
  * import { SSEPubSubRedis } from "@marianmeres/sse/adapters/redis";
  * import { createSSEApp } from "@marianmeres/sse/server";
  *
@@ -21,7 +22,7 @@
  * await adapter.init();
  *
  * const { app, service } = createSSEApp("/sse", [], { adapter });
- * Deno.serve(app);
+ * await serve(app, { port: 8000 });
  * ```
  *
  * @module

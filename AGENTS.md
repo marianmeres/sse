@@ -7,11 +7,14 @@ demino-mountable reference server.
 
 ```yaml
 name: "@marianmeres/sse"
-runtime: "deno (primary), browser/node/bun (client)"
+runtime: "node (dev + reference); deno = JSR consumer runtime; client also browser"
+registries: "npm (manifest of record: package.json, dist/ from tsc) + JSR (deno.json, src/)"
 entry: "./src/mod.ts"
 exports: [".", "./server", "./protocol", "./adapters/redis"]
-test: "deno task test"
-check: "deno task check" # lint + fmt + type check + deno doc --lint
+install: "pnpm install"
+test: "pnpm test" # node:test on Node; `pnpm run test:deno` runs the same suite on Deno
+check: "pnpm run ci" # tsc --noEmit + Biome + tests + npm smoke
+jsr: "pnpm run jsr:check" # deno doc --lint + deno publish --dry-run
 ```
 
 | Task                     | File                           | Key symbol                     |
@@ -45,13 +48,33 @@ src/
 ├── client/
 └── server/
     └── adapters/          # cross-instance fan-out seam (local + redis)
+tests/                     # node:test + node:assert; runs on Node and on Deno
+scripts/smoke-npm.mjs      # packs, installs and round-trips the npm tarball
+package.json               # manifest of record: version, deps, exports -> dist/, scripts
+deno.json                  # JSR manifest: exports -> src/, jsr: import map; no version, no tasks
 ```
 
 `src/server.ts`, `src/protocol.ts` and `src/adapters/redis.ts` exist because
-the npm build maps subpath exports to `src/{name}.ts`. Do not inline them away
-— they also carry the `@module` docs JSR renders as each subpath's landing
-page. `./adapters/redis` is JSR-only (like `./server`) and deliberately a
-separate entry: importing the server must not drag Redis-flavoured code in.
+every subpath export maps to a flat `src/{name}.ts` (`dist/{name}.js` on npm).
+Do not inline them away — they also carry the `@module` docs JSR renders as
+each subpath's landing page. `./adapters/redis` is deliberately a separate
+entry: importing the server must not drag Redis-flavoured code in.
+
+**Two manifests, one package.** `package.json` is the only one with a
+`version` and the only one with scripts; `deno.json` mirrors its dependencies
+as `jsr:` imports with the same ranges. `tests/manifest-sync.test.ts` fails on
+any drift — a new dependency goes into both. `@marianmeres/demino` is an
+**optional peer** on npm (plus a devDependency), never a dependency: a
+client-only install must not pull a server framework, and the host's demino
+and ours must be one copy.
+
+**Runtime policy.** Node is the dev runtime and the gate; Deno stays a tested
+consumer runtime only while JSR consumers exist; nothing is built or tested
+for Bun. No `Deno.*` / `Bun.*` in `src/`, no `jsr:`/`npm:`/`https:`
+specifiers, erasable-only TS (`tsc` with `erasableSyntaxOnly` enforces it).
+The tests pick demino's `/node` or `/deno` adapter by runtime
+(`tests/_helpers.ts` `listen()`), so each runtime is tested the way its
+consumers serve the app.
 
 ## Critical Conventions
 
@@ -123,26 +146,36 @@ synchronously in the constructor) — hence `await adapter.init()` first.
 
 ## Before Making Changes
 
-1. `deno task test` — 154 tests against a real `Deno.serve` and Deno's global
-   `EventSource`. Two of them run against a live Redis and are skipped unless
-   `TEST_REDIS_URL` is set (e.g. `redis://localhost:6379/13`)
-2. `deno task check` — lint, fmt, type check, **and `deno doc --lint`**
-3. Touching the wire? Update `src/protocol/` first, then both sides
-4. Touching reconnect, replay or the probe? Read `tests/resilience.test.ts`
+1. `pnpm test` — 159 tests on `node:test`, against a real server (demino's
+   `/node` adapter) and Node's `EventSource` (the script passes
+   `--experimental-eventsource`). Two of them run against a live Redis and are
+   skipped unless `TEST_REDIS_URL` is set (e.g.
+   `TEST_REDIS_URL=redis://localhost:6379/13 pnpm test`)
+2. `pnpm run ci` — `tsc --noEmit` (the only type gate: Node strips types and
+   never checks them), Biome lint + format check, the suite, and the npm smoke
+   (`scripts/smoke-npm.mjs`: pack, install without demino, import the client;
+   install demino, round-trip a message on Node)
+3. `pnpm run test:deno` — the same suite on Deno (`deno test`, its own
+   `EventSource`, demino's `/deno` adapter). Needed while JSR consumers exist
+4. Touching the wire? Update `src/protocol/` first, then both sides
+5. Touching reconnect, replay or the probe? Read `tests/resilience.test.ts`
    first — those tests encode the failure modes the design exists to handle
-5. Touching error branches or the adapter seam? `tests/edge.test.ts`; the
+6. Touching error branches or the adapter seam? `tests/edge.test.ts`; the
    Redis adapter's contract lives in `tests/redis-adapter.test.ts` (in-memory
    fake) and `tests/redis-live.test.ts` (real wire)
-6. `deno task npm:build` if packaging changed (npm ships the **client only**;
-   the server and the Redis adapter are left out via `sourceFiles` — a
-   packaging choice, not a runtime limit: they need demino, which is on npm
-   since 2.0, but shipping them means an optional peer and a Node smoke, as
-   `@marianmeres/ws` does)
+7. Adding or bumping a dependency? Same range in `package.json` and
+   `deno.json`; `tests/manifest-sync.test.ts` enforces it
 
-## Publishing to JSR
+## Publishing
 
-`deno task check` is not optional — JSR rejects a package that fails either of
-the two checks it bundles:
+`pnpm run rp` / `rpm` releases (`@marianmeres/release` bumps `package.json`,
+rebuilds the example bundle before committing) and publishes to npm, then
+JSR with the same version (`deno publish --set-version`). `pnpm run
+publish:next` sends a prerelease to npm under the `next` tag. `prepublishOnly`
+runs `pnpm run ci` and the `tsc` build, so npm never gets an untested `dist/`.
+
+`pnpm run jsr:check` is not optional — JSR rejects a package that fails either
+of the two checks it bundles (CI runs it in the Deno job):
 
 - **No slow types.** Every exported function, method and accessor needs an
   explicit return type. `deno publish --dry-run` is the authoritative check.
@@ -150,12 +183,14 @@ the two checks it bundles:
   `@param` tags does **not** count — `deno doc --lint` wants a leading
   description sentence, which is the one that trips constructors.
 
+`deno publish` type-checks with `tsconfig.json` (Deno reads it when a
+`package.json` is present), which is why `lib` lists `esnext.disposable`:
+tsc gets `Symbol.dispose` from `@types/node`, Deno does not.
+
 Also: every entry point (`src/mod.ts`, `src/server.ts`, `src/protocol.ts`,
 `src/adapters/redis.ts`) carries a `@module` doc with a usage `@example`. That
 is what renders as the package landing page on jsr.io, so treat it as the
 front door, not a comment.
-
-`deno task rp` releases and publishes to both registries.
 
 ## Known Gaps
 
@@ -164,9 +199,10 @@ front door, not a comment.
   balancer without sticky sessions, replay silently does nothing
 - `recipients` counts are instance-local; they stay that way under a
   distributed adapter
-- No Deno-KV adapter. Redis ships (`./adapters/redis`); a KV implementation for
-  the same seam existed in the predecessor (`stack-sse` git history) and can be
-  resurrected if a zero-infra multi-instance option is ever wanted
+- No zero-infra multi-instance option. Redis ships (`./adapters/redis`); an
+  earlier implementation had a Deno-KV adapter for the same seam, deliberately
+  not carried over — Deno KV is runtime lock-in. A SQLite or Postgres adapter
+  would be the portable equivalent if one is ever wanted
 - No presence (`@marianmeres/ws` has it)
 - No binary payloads — JSON text only
 - No rate limiting. A per-`clientId` cap would be theatre when the client mints
@@ -176,8 +212,12 @@ front door, not a comment.
   wrong at fifty — that workload wants `@marianmeres/ws`
 - An SSE stream consumes one of the browser's ~6 per-origin HTTP/1.1
   connections. Non-issue over HTTP/2
-- The server is JSR-only: a Node app cannot `npm install` it yet, although it
-  uses no Deno API and runs under demino 2.0's Node adapter
+- On Node (22–26) the client needs `--experimental-eventsource`: it uses the
+  global `EventSource`, which Node still keeps behind that flag. There is no
+  option to inject a constructor
+- Deno 2.9 prints a one-time `request.signal aborts on successful responses
+  (legacy behavior)` notice during `test:deno`, from the service's use of
+  `req.signal`. It predates the move to Node; unexamined
 
 ## Documentation Index
 
@@ -187,7 +227,7 @@ front door, not a comment.
 | `API.md`            | Complete API reference and wire protocol       |
 | `COMPARISON.md`     | How this differs from `@marianmeres/ws`        |
 | `docs/DESIGN.md`    | Decision log — _why_ the conventions above are |
-| `example/README.md` | Runnable reference app — `deno task example`   |
+| `example/README.md` | Runnable reference app — `pnpm run example`    |
 
 `docs/DESIGN.md` is the reasoning behind the rules in "Critical Conventions" —
 read it before arguing with one of them. It is a decision log, not a reference;
@@ -197,7 +237,7 @@ the code wins.
 ## The Example
 
 `example/` is a working ops feed exercising the whole surface — run it with
-`deno task example`. It is excluded from both `deno publish` and the npm build,
+`pnpm run example`. It is excluded from both `deno publish` and the npm package,
 and it imports `../src/` directly so it always builds against the working tree.
 
 It is the fastest way to see replay behave: pause, wait, resume. Note that

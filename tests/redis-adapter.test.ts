@@ -5,7 +5,8 @@
  * exactly why self-echo suppression is the adapter's job.
  */
 
-import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
+import assert from "node:assert/strict";
+import { test } from "node:test";
 
 import { createSSEClient, type SSEClient } from "../src/client/sse-client.ts";
 import { SSEError } from "../src/protocol/errors.ts";
@@ -14,7 +15,7 @@ import type { RedisLike } from "../src/adapters/redis.ts";
 import { SSEPubSubRedis } from "../src/adapters/redis.ts";
 import type { SSEBroadcastEnvelope } from "../src/server/mod.ts";
 import { createSSEApp, SSEService } from "../src/server/mod.ts";
-import { sleep, startServer, until } from "./_helpers.ts";
+import { listen, rejection, sleep, startServer, until } from "./_helpers.ts";
 
 // ------------------------------------------------------------- fake redis
 
@@ -140,23 +141,23 @@ function envelope(
 
 // ------------------------------------------------------------ conformance
 
-Deno.test("redis adapter: publish before init() rejects", async () => {
+test("redis adapter: publish before init() rejects", async () => {
 	const hub = new FakeRedisHub();
 	const { adapter: a } = adapter(hub);
-	await assertRejects(() => a.publish(envelope({ v: 1 })), SSEError, "not initialized");
+	await assert.rejects(() => a.publish(envelope({ v: 1 })), { name: "SSEError", message: /not initialized/ });
 	await a.close();
 });
 
-Deno.test("redis adapter: init() is idempotent and concurrency-safe", async () => {
+test("redis adapter: init() is idempotent and concurrency-safe", async () => {
 	const hub = new FakeRedisHub();
 	const { adapter: a } = adapter(hub);
 	await Promise.all([a.init(), a.init()]);
 	await a.init();
-	assertEquals(hub.subscribeCalls, 1, "one shared subscription");
+	assert.deepEqual(hub.subscribeCalls, 1, "one shared subscription");
 	await a.close();
 });
 
-Deno.test("redis adapter: a frame crosses adapters and never echoes back", async () => {
+test("redis adapter: a frame crosses adapters and never echoes back", async () => {
 	const hub = new FakeRedisHub();
 	const { adapter: a } = adapter(hub);
 	const { adapter: b } = adapter(hub);
@@ -172,15 +173,15 @@ Deno.test("redis adapter: a frame crosses adapters and never echoes back", async
 	await a.publish(sent);
 
 	await until(() => atB.length === 1, "peer received the envelope");
-	assertEquals(atB[0], sent, "envelope crosses verbatim");
+	assert.deepEqual(atB[0], sent, "envelope crosses verbatim");
 	await sleep(20);
-	assertEquals(atA.length, 0, "own echo is suppressed");
+	assert.deepEqual(atA.length, 0, "own echo is suppressed");
 
 	await a.close();
 	await b.close();
 });
 
-Deno.test("redis adapter: a broadcast envelope (namespace null) crosses intact", async () => {
+test("redis adapter: a broadcast envelope (namespace null) crosses intact", async () => {
 	const hub = new FakeRedisHub();
 	const { adapter: a } = adapter(hub);
 	const { adapter: b } = adapter(hub);
@@ -192,13 +193,13 @@ Deno.test("redis adapter: a broadcast envelope (namespace null) crosses intact",
 
 	await a.publish(envelope({ v: 2 }, null));
 	await until(() => atB.length === 1, "broadcast crossed");
-	assertEquals(atB[0].namespace, null);
+	assert.deepEqual(atB[0].namespace, null);
 
 	await a.close();
 	await b.close();
 });
 
-Deno.test("redis adapter: adapters on different channels do not see each other", async () => {
+test("redis adapter: adapters on different channels do not see each other", async () => {
 	const hub = new FakeRedisHub();
 	const { adapter: a } = adapter(hub, "app-a");
 	const { adapter: b } = adapter(hub, "app-b");
@@ -210,13 +211,13 @@ Deno.test("redis adapter: adapters on different channels do not see each other",
 
 	await a.publish(envelope({ v: 1 }));
 	await sleep(20);
-	assertEquals(atB.length, 0);
+	assert.deepEqual(atB.length, 0);
 
 	await a.close();
 	await b.close();
 });
 
-Deno.test("redis adapter: malformed and foreign frames are dropped, subscription survives", async () => {
+test("redis adapter: malformed and foreign frames are dropped, subscription survives", async () => {
 	const hub = new FakeRedisHub();
 	const { adapter: a } = adapter(hub);
 	const { adapter: b } = adapter(hub);
@@ -244,7 +245,7 @@ Deno.test("redis adapter: malformed and foreign frames are dropped, subscription
 		JSON.stringify({ origin: "x", envelope: { namespace: "ns", message: {} } }),
 	);
 	await sleep(20);
-	assertEquals(atB.length, 0, "nothing malformed got through");
+	assert.deepEqual(atB.length, 0, "nothing malformed got through");
 
 	// And a legitimate frame afterwards proves the handler survived it all.
 	await a.publish(envelope({ v: 3 }));
@@ -255,7 +256,7 @@ Deno.test("redis adapter: malformed and foreign frames are dropped, subscription
 	await b.close();
 });
 
-Deno.test("redis adapter: multiple sinks each receive; unsubscribing one keeps the rest", async () => {
+test("redis adapter: multiple sinks each receive; unsubscribing one keeps the rest", async () => {
 	const hub = new FakeRedisHub();
 	const { adapter: a } = adapter(hub);
 	const { adapter: b } = adapter(hub);
@@ -274,13 +275,13 @@ Deno.test("redis adapter: multiple sinks each receive; unsubscribing one keeps t
 	await a.publish(envelope({ v: 2 }));
 	await until(() => second.length === 2, "remaining sink still fires");
 	await sleep(20);
-	assertEquals(first.length, 1, "removed sink stayed silent");
+	assert.deepEqual(first.length, 1, "removed sink stayed silent");
 
 	await a.close();
 	await b.close();
 });
 
-Deno.test("redis adapter: a throwing sink does not starve the others", async () => {
+test("redis adapter: a throwing sink does not starve the others", async () => {
 	const hub = new FakeRedisHub();
 	const { adapter: a } = adapter(hub);
 	const { adapter: b } = adapter(hub);
@@ -300,80 +301,82 @@ Deno.test("redis adapter: a throwing sink does not starve the others", async () 
 	await b.close();
 });
 
-Deno.test("redis adapter: close() destroys both connections and is idempotent", async () => {
+test("redis adapter: close() destroys both connections and is idempotent", async () => {
 	const hub = new FakeRedisHub();
 	const { adapter: a, client } = adapter(hub);
 	await a.init();
-	assert(client.isOpen);
+	assert.ok(client.isOpen);
 
 	await a.close();
-	assertEquals(client.isOpen, false, "provided client destroyed (adapter owns it)");
-	assertEquals(
+	assert.deepEqual(client.isOpen, false, "provided client destroyed (adapter owns it)");
+	assert.deepEqual(
 		[...hub.listeners.values()].reduce((n, s) => n + s.size, 0),
 		0,
 		"subscriber connection deregistered",
 	);
 
 	await a.close(); // second close is a no-op
-	await assertRejects(() => a.publish(envelope({ v: 1 })), SSEError, "closed");
-	await assertRejects(() => a.init(), SSEError, "closed");
+	await assert.rejects(() => a.publish(envelope({ v: 1 })), { name: "SSEError", message: /closed/ });
+	await assert.rejects(() => a.init(), { name: "SSEError", message: /closed/ });
 });
 
-Deno.test("redis adapter: close() before init() resolves quietly", async () => {
+test("redis adapter: close() before init() resolves quietly", async () => {
 	const hub = new FakeRedisHub();
 	const { adapter: a, client } = adapter(hub);
 	await a.close();
-	assertEquals(client.isOpen, false, "never-connected client stays closed");
+	assert.deepEqual(client.isOpen, false, "never-connected client stays closed");
 });
 
-Deno.test("redis adapter: close() racing an in-flight init() leaves nothing behind", async () => {
+test("redis adapter: close() racing an in-flight init() leaves nothing behind", async () => {
 	const hub = new FakeRedisHub();
 	const { adapter: a, client } = adapter(hub);
 	const init = a.init(); // deliberately not awaited
 	await a.close();
 	await init.catch(() => {});
-	assertEquals(client.isOpen, false, "provided client destroyed");
-	assertEquals(hub.liveSubscriptions(), 0, "no subscription finished materializing");
+	assert.deepEqual(client.isOpen, false, "provided client destroyed");
+	assert.deepEqual(hub.liveSubscriptions(), 0, "no subscription finished materializing");
 	for (const c of hub.clients) {
-		assertEquals(c.isOpen, false, "no connection leaked past close()");
+		assert.deepEqual(c.isOpen, false, "no connection leaked past close()");
 	}
 });
 
-Deno.test("redis adapter: attaches an error listener to both connections", async () => {
+test("redis adapter: attaches an error listener to both connections", async () => {
 	// A node-redis client emitting a socket error with no listener kills the
 	// process — and nobody but the adapter can ever reach the duplicate.
 	const hub = new FakeRedisHub();
 	const { adapter: a, client } = adapter(hub);
 	await a.init();
-	assertEquals(hub.clients.length, 2, "publisher + duplicated subscriber");
-	assertEquals(client.errorListeners.length, 1);
-	assertEquals(hub.clients[1].errorListeners.length, 1);
+	assert.deepEqual(hub.clients.length, 2, "publisher + duplicated subscriber");
+	assert.deepEqual(client.errorListeners.length, 1);
+	assert.deepEqual(hub.clients[1].errorListeners.length, 1);
 	await a.close();
 });
 
-Deno.test("redis adapter: a failed init() stays failed and releases what it connected", async () => {
+test("redis adapter: a failed init() stays failed and releases what it connected", async () => {
 	const hub = new FakeRedisHub();
 	const client = new FakeRedisClient(hub);
 	client.failSubscribe = true; // publisher connects fine; subscriber cannot SUBSCRIBE
 	const a = new SSEPubSubRedis({ client, channel: "test", logger: null });
 
-	const first = await assertRejects(() => a.init(), Error, "NOPERM");
-	assertEquals(client.isOpen, false, "failed init released the connected publisher");
-	for (const c of hub.clients) assertEquals(c.isOpen, false);
+	const first = await rejection(() => a.init(), Error);
+	assert.match(first.message, /NOPERM/);
+	assert.deepEqual(client.isOpen, false, "failed init released the connected publisher");
+	for (const c of hub.clients) assert.deepEqual(c.isOpen, false);
 
-	const second = await assertRejects(() => a.init(), Error, "NOPERM");
-	assert(first === second, "the attempt is memoized — same rejection, no retry");
+	const second = await rejection(() => a.init(), Error);
+	assert.match(second.message, /NOPERM/);
+	assert.ok(first === second, "the attempt is memoized — same rejection, no retry");
 
-	await assertRejects(() => a.publish(envelope({ v: 1 })), Error, "NOPERM");
+	await assert.rejects(() => a.publish(envelope({ v: 1 })), /NOPERM/);
 	await a.close(); // resolves quietly after a failed init
 });
 
-Deno.test("redis adapter: init() propagates a connect failure", async () => {
+test("redis adapter: init() propagates a connect failure", async () => {
 	const hub = new FakeRedisHub();
 	const client = new FakeRedisClient(hub);
 	client.failConnect = true;
 	const a = new SSEPubSubRedis({ client, channel: "test", logger: null });
-	await assertRejects(() => a.init(), Error, "connect refused");
+	await assert.rejects(() => a.init(), /connect refused/);
 	await a.close();
 });
 
@@ -394,15 +397,15 @@ function client(
 	});
 }
 
-Deno.test("redis adapter: two services fan out, no double delivery at the origin", async () => {
+test("redis adapter: two services fan out, no double delivery at the origin", async () => {
 	const hub = new FakeRedisHub();
 	const { adapter: adapterA, client: clientA } = adapter(hub);
 	const { adapter: adapterB, client: clientB } = adapter(hub);
 	await adapterA.init();
 	await adapterB.init();
 
-	const a = startServer({ adapter: adapterA });
-	const b = startServer({ adapter: adapterB });
+	const a = await startServer({ adapter: adapterA });
+	const b = await startServer({ adapter: adapterB });
 	const sseA = client(a.url, { clientId: "c-a" });
 	const sseB = client(b.url, { clientId: "c-b" });
 	try {
@@ -414,13 +417,13 @@ Deno.test("redis adapter: two services fan out, no double delivery at the origin
 		await sseB.subscribe("chat", (m) => gotB.push(m));
 
 		const recipients = await a.service.publish("chat", { v: 1 }, "ns");
-		assertEquals(recipients, 1, "recipients counts stay instance-local");
+		assert.deepEqual(recipients, 1, "recipients counts stay instance-local");
 
 		await until(() => gotB.length === 1, "peer instance delivered it");
-		assertEquals(gotB[0].payload, { v: 1 });
+		assert.deepEqual(gotB[0].payload, { v: 1 });
 
 		await sleep(30);
-		assertEquals(gotA.length, 1, "origin delivered exactly once — no redis echo");
+		assert.deepEqual(gotA.length, 1, "origin delivered exactly once — no redis echo");
 	} finally {
 		sseA.dispose();
 		sseB.dispose();
@@ -429,41 +432,39 @@ Deno.test("redis adapter: two services fan out, no double delivery at the origin
 	}
 
 	// The seam contract: SSEService.close() (inside stop()) closes its adapter.
-	assertEquals(clientA.isOpen, false, "service.close() closed adapter A");
-	assertEquals(clientB.isOpen, false, "service.close() closed adapter B");
-	assertEquals(hub.liveSubscriptions(), 0, "no redis subscription survived");
+	assert.deepEqual(clientA.isOpen, false, "service.close() closed adapter A");
+	assert.deepEqual(clientB.isOpen, false, "service.close() closed adapter B");
+	assert.deepEqual(hub.liveSubscriptions(), 0, "no redis subscription survived");
 });
 
 // --------------------------------------------------- service injection seam
 
-Deno.test("createSSEApp refuses service combined with service options", async () => {
+test("createSSEApp refuses service combined with service options", async () => {
 	const service = new SSEService({ logger: null, heartbeatInterval: 0 });
 	try {
 		// The trap this closes: injecting a service while passing `verify`,
 		// which would otherwise be silently ignored — shipping unauthenticated.
-		assertThrows(
+		assert.throws(
 			() => createSSEApp("/sse", [], { service, verify: () => null }),
-			SSEError,
-			"cannot be combined",
+			{ name: "SSEError", message: /cannot be combined/ },
 		);
 	} finally {
 		await service.close();
 	}
 });
 
-Deno.test("createSSEApp mounts over an injected service", async () => {
+test("createSSEApp mounts over an injected service", async () => {
 	const service = new SSEService({ logger: null, heartbeatInterval: 0 });
 	const { app, service: returned } = createSSEApp("/sse", [], {
 		service,
 		deminoOptions: { logger: null },
 	});
-	assert(returned === service, "the injected service is the app's service");
+	assert.ok(returned === service, "the injected service is the app's service");
 
-	const server = Deno.serve(
-		{ port: 0, onListen: () => {}, hostname: "127.0.0.1" },
+	const server = await listen(
 		app,
 	);
-	const url = `http://127.0.0.1:${(server.addr as Deno.NetAddr).port}/sse`;
+	const url = `http://127.0.0.1:${server.port}/sse`;
 	const sse = client(url);
 	try {
 		const got: SSEMessage[] = [];

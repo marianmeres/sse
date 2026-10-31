@@ -1,3 +1,8 @@
+import assert from "node:assert/strict";
+import { createServer } from "node:net";
+import { versions } from "node:process";
+import type { DeminoServeHandler } from "@marianmeres/demino";
+import type { ServeFn, ServeHandle } from "@marianmeres/demino/node";
 import { createSSEApp, type SSEAppOptions, type SSEService } from "../src/server/mod.ts";
 
 export interface TestServer {
@@ -8,12 +13,63 @@ export interface TestServer {
 	stop(): Promise<void>;
 }
 
+let servePromise: Promise<ServeFn> | undefined;
+
+/**
+ * The runtime's own demino adapter, so each runtime is tested the way its
+ * consumers serve the app: `/node` on Node (npm), `/deno` on Deno (JSR).
+ */
+function pickServe(): Promise<ServeFn> {
+	servePromise ??= versions.deno
+		? import("@marianmeres/demino/deno").then((m) => m.serve)
+		: import("@marianmeres/demino/node").then((m) => m.serve);
+	return servePromise;
+}
+
+/**
+ * Serves `handler` silently on `127.0.0.1:port` (or an ephemeral port). No
+ * WebSocket upgrades: SSE never needs them, and on Node they would mean `ws`.
+ */
+export async function listen(
+	handler: DeminoServeHandler,
+	port = 0,
+): Promise<ServeHandle> {
+	const serve = await pickServe();
+	return serve(handler, {
+		port,
+		hostname: "127.0.0.1",
+		onListen: () => {},
+		webSockets: false,
+	});
+}
+
 /** Grabs a port, releases it, and hands back the number. */
-export function freePort(): number {
-	const listener = Deno.listen({ port: 0 });
-	const { port } = listener.addr as Deno.NetAddr;
-	listener.close();
-	return port;
+export function freePort(): Promise<number> {
+	return new Promise((resolve, reject) => {
+		const server = createServer();
+		server.once("error", reject);
+		server.listen(0, "127.0.0.1", () => {
+			const { port } = server.address() as { port: number };
+			server.close(() => resolve(port));
+		});
+	});
+}
+
+/**
+ * Asserts that `fn` rejects with an instance of `ErrorClass` and returns the
+ * error, which `assert.rejects` does not.
+ */
+export async function rejection<E extends Error>(
+	fn: () => Promise<unknown>,
+	ErrorClass: new (...args: never[]) => E,
+): Promise<E> {
+	try {
+		await fn();
+	} catch (e) {
+		assert.ok(e instanceof ErrorClass, `expected ${ErrorClass.name}, got ${e}`);
+		return e;
+	}
+	assert.fail(`expected a rejection with ${ErrorClass.name}`);
 }
 
 /**
@@ -23,10 +79,10 @@ export function freePort(): number {
  * reconnect happens within a test's lifetime, and heartbeats off unless a test
  * asks for them.
  */
-export function startServer(
+export async function startServer(
 	options: SSEAppOptions = {},
 	port = 0,
-): TestServer {
+): Promise<TestServer> {
 	const { app, service } = createSSEApp("/sse", [], {
 		logger: null,
 		deminoOptions: { logger: null },
@@ -34,15 +90,11 @@ export function startServer(
 		retryInterval: 100,
 		...options,
 	});
-	const server = Deno.serve(
-		{ port, onListen: () => {}, hostname: "127.0.0.1" },
-		app,
-	);
-	const actual = (server.addr as Deno.NetAddr).port;
+	const server = await listen(app, port);
 
 	return {
-		url: `http://127.0.0.1:${actual}/sse`,
-		port: actual,
+		url: `http://127.0.0.1:${server.port}/sse`,
+		port: server.port,
 		service,
 		async stop() {
 			await service.close();
@@ -71,14 +123,13 @@ export interface FlakyServer {
  * demand, and telling a retryable failure from a terminal one is the whole
  * point of the probe.
  */
-export function startFlakyServer(port = 0): FlakyServer {
+export async function startFlakyServer(port = 0): Promise<FlakyServer> {
 	const open = new Set<ReadableStreamDefaultController<Uint8Array>>();
 	const enc = new TextEncoder();
 
 	const state: { status: number; hits: number } = { status: 200, hits: 0 };
 
-	const server = Deno.serve(
-		{ port, onListen: () => {}, hostname: "127.0.0.1" },
+	const server = await listen(
 		(req) => {
 			const url = new URL(req.url);
 
@@ -123,13 +174,12 @@ export function startFlakyServer(port = 0): FlakyServer {
 				headers: { "content-type": "text/event-stream" },
 			});
 		},
+		port,
 	);
 
-	const actual = (server.addr as Deno.NetAddr).port;
-
-	return {
-		url: `http://127.0.0.1:${actual}/sse`,
-		port: actual,
+	const flaky: FlakyServer = {
+		url: `http://127.0.0.1:${server.port}/sse`,
+		port: server.port,
 		get status() {
 			return state.status;
 		},
@@ -151,10 +201,11 @@ export function startFlakyServer(port = 0): FlakyServer {
 			open.clear();
 		},
 		async stop() {
-			this.dropStreams();
+			flaky.dropStreams();
 			await server.shutdown();
 		},
 	};
+	return flaky;
 }
 
 /** One parsed SSE event. */
@@ -284,7 +335,7 @@ export async function rpc(
 	base: string,
 	body: unknown,
 	headers: Record<string, string> = {},
-	// deno-lint-ignore no-explicit-any
+	// biome-ignore lint/suspicious/noExplicitAny: tests poke at arbitrary response shapes
 ): Promise<{ status: number; json: any }> {
 	const res = await fetch(`${base}/rpc`, {
 		method: "POST",

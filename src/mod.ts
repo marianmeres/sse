@@ -2,9 +2,9 @@
  * `@marianmeres/sse` — a Server-Sent Events client with namespaces, rooms,
  * replay and auto-reconnect.
  *
- * The client is dependency-light and runs in browsers, Deno, Node 22+ and Bun —
- * `EventSource` is a global in all of them, so there is no polyfill and no
- * transport dependency.
+ * The client is dependency-light and uses the global `EventSource`, so there
+ * is no polyfill and no transport dependency. Browsers and Deno have it built
+ * in; Node 22–26 only with `--experimental-eventsource`.
  *
  * The reference server lives behind a separate entry point,
  * `@marianmeres/sse/server`, so `demino` never lands in a browser bundle.

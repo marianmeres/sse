@@ -11,7 +11,7 @@
  *
  * Run:
  * ```
- * deno task example          # builds the client bundle, then serves
+ * pnpm run example          # builds the client bundle, then serves
  * ```
  *
  * @module
@@ -24,7 +24,10 @@ import {
 	type DeminoHandler,
 	logListenInfo,
 } from "@marianmeres/demino";
-import { dirname, fromFileUrl, join } from "@std/path";
+import { serve } from "@marianmeres/demino/node";
+import { dirname, join } from "node:path";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
 import { createSSEApp } from "../src/server.ts";
 import { HistoryAdapter } from "./history.ts";
 import { Pipeline } from "./pipeline.ts";
@@ -38,16 +41,16 @@ import {
 	TAB_RE,
 } from "./shared.ts";
 
-const HERE = dirname(fromFileUrl(import.meta.url));
+const HERE = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(HERE, "public");
 
-const PORT = Number(Deno.env.get("PORT")) || 8000;
+const PORT = Number(process.env.PORT) || 8000;
 
 /**
  * Shared secret for the HTTP injection routes. Hard-coded default because this
  * is a demo; the point is that the routes exist *only* because `httpAuth` does.
  */
-const ADMIN_TOKEN = Deno.env.get("SSE_EXAMPLE_TOKEN") || "dev-secret";
+const ADMIN_TOKEN = process.env.SSE_EXAMPLE_TOKEN || "dev-secret";
 
 /**
  * Every message passes through here on its way out. See `history.ts` — the
@@ -203,13 +206,14 @@ siteApp.static("/", PUBLIC_DIR);
 if (import.meta.main) {
 	pipeline.start();
 
-	Deno.serve(
-		{
-			port: PORT,
-			onListen: (addr: Deno.NetAddr) => {
-				logListenInfo(addr);
-				const base = `http://localhost:${addr.port}`;
-				console.log(`
+	await serve(deminoCompose([siteApp, apiApp, sseApp]), {
+		port: PORT,
+		// SSE is plain HTTP; on Node, upgrades would need the optional `ws` peer
+		webSockets: false,
+		onListen: (addr) => {
+			logListenInfo(addr);
+			const base = `http://localhost:${addr.port}`;
+			console.log(`
   Open ${base}. A fake pipeline is already publishing.
 
   The thing to try: hit "pause", let the feed run on without you, then
@@ -228,18 +232,16 @@ if (import.meta.main) {
 
     curl -s ${base}/sse/stats -H "authorization: Bearer ${ADMIN_TOKEN}"
 `);
-			},
 		},
-		deminoCompose([siteApp, apiApp, sseApp]),
-	);
+	});
 
 	// Close every stream on Ctrl-C. The client sees the drop, EventSource
 	// retries on its own, and restarting the server brings everyone back —
 	// with replay filling the outage, as long as it fits the window.
-	Deno.addSignalListener("SIGINT", () => {
+	process.on("SIGINT", () => {
 		console.log("\nshutting down…");
 		pipeline.stop();
-		service.close().finally(() => Deno.exit(0));
+		service.close().finally(() => process.exit(0));
 	});
 }
 

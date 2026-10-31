@@ -1,0 +1,3 @@
+# esbuild (via @marianmeres/bundle, the example bundler) works without its postinstall
+allowBuilds:
+  esbuild: false

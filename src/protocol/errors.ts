@@ -31,6 +31,11 @@ export class SSEError extends Error {
  * one would be indistinguishable from a network that never recovered.
  */
 export class SSETerminatedError extends SSEError {
+	/** The HTTP status that ended it, or `0` for a local `disconnect()`. */
+	readonly status: number;
+	/** Human-readable explanation. */
+	readonly reason: string;
+
 	/**
 	 * Creates the error.
 	 *
@@ -38,8 +43,10 @@ export class SSETerminatedError extends SSEError {
 	 * `disconnect()`
 	 * @param reason - human-readable explanation
 	 */
-	constructor(readonly status: number, readonly reason: string) {
+	constructor(status: number, reason: string) {
 		super(`Connection terminated (${status})${reason ? `: ${reason}` : ""}`);
+		this.status = status;
+		this.reason = reason;
 	}
 }
 
@@ -76,6 +83,8 @@ export class SSETimeoutError extends SSEError {
 export class SSERemoteError extends SSEError {
 	/** Machine-readable code — see `ERROR_CODE`. Branch on this, not the message. */
 	readonly code: string;
+	/** The HTTP status it came with. */
+	readonly status: number;
 
 	/**
 	 * Creates the error, flattening the server's `SSEErrorInfo` into `code`
@@ -84,9 +93,10 @@ export class SSERemoteError extends SSEError {
 	 * @param info - the structured error the server returned
 	 * @param status - the HTTP status it came with
 	 */
-	constructor(info: SSEErrorInfo, readonly status: number) {
+	constructor(info: SSEErrorInfo, status: number) {
 		super(info.message);
 		this.code = info.code;
+		this.status = status;
 	}
 }
 

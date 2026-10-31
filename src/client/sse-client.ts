@@ -724,7 +724,8 @@ export class SSEClient<TAuth = unknown> {
 		try {
 			hello = JSON.parse(ev.data);
 		} catch (e) {
-			return this.#fail(e, "malformed hello");
+			this.#fail(e, "malformed hello");
+			return;
 		}
 
 		this.#hello = hello;
@@ -791,7 +792,8 @@ export class SSEClient<TAuth = unknown> {
 		try {
 			message = JSON.parse(ev.data);
 		} catch (e) {
-			return this.#fail(e, "malformed message");
+			this.#fail(e, "malformed message");
+			return;
 		}
 
 		this.#emit("message", message);

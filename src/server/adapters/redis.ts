@@ -25,7 +25,7 @@ import type { SSEBroadcastEnvelope, SSEPubSubAdapter } from "./abstract.ts";
  * The slice of a Redis client this adapter needs.
  *
  * Deliberately structural, so the package takes no dependency on any concrete
- * Redis library — `npm:redis` (node-redis v6) satisfies it as-is, and anything
+ * Redis library — node-redis v6 (`redis` on npm) satisfies it as-is, and anything
  * else that walks like it will do.
  */
 export interface RedisLike {

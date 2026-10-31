@@ -1,14 +1,16 @@
 # Reference implementation — a live ops feed
 
 A complete, standalone app built on `@marianmeres/sse`: a
-[demino](https://jsr.io/@marianmeres/demino) server and a plain HTML client
-written with [`@marianmeres/vanilla`](https://jsr.io/@marianmeres/vanilla) and
-bundled by [`@marianmeres/deno-build`](https://jsr.io/@marianmeres/deno-build).
-Styling is [`@marianmeres/design-tokens`](https://jsr.io/@marianmeres/design-tokens)
+[demino](https://www.npmjs.com/package/@marianmeres/demino) server on Node and a
+plain HTML client written with
+[`@marianmeres/vanilla`](https://www.npmjs.com/package/@marianmeres/vanilla) and
+bundled by [`@marianmeres/bundle`](https://www.npmjs.com/package/@marianmeres/bundle).
+Styling is
+[`@marianmeres/design-tokens`](https://www.npmjs.com/package/@marianmeres/design-tokens)
 with the Bootstrap Reboot bridge — minimal, but every colour is a token.
 
 ```bash
-deno task example        # builds the client bundle, then serves on :8000
+pnpm run example        # builds the client bundle, then serves on :8000
 ```
 
 Open <http://localhost:8000>. A fake CI/CD pipeline is already publishing, so
@@ -54,20 +56,20 @@ example/
     ├── app.css        layout, entirely token-driven
     ├── reboot.css     Bootstrap Reboot (vendored, MIT)
     ├── theme.css      generated — design tokens + the --bs-* bridge
-    └── dist/bundle.js generated — deno task example:build
+    └── dist/bundle.js generated — pnpm run example:build
 ```
 
 ## Tasks
 
-| Task                      | What                                                   |
-| ------------------------- | ------------------------------------------------------ |
-| `deno task example`       | build the bundle, then serve                           |
-| `deno task example:build` | bundle `client/mod.ts` → `public/dist/bundle.js`       |
-| `deno task example:watch` | same, rebuilding on change (run the server separately) |
-| `deno task example:theme` | regenerate `public/theme.css`                          |
+| Task                     | What                                                   |
+| ------------------------ | ------------------------------------------------------ |
+| `pnpm run example`       | build the bundle, then serve                           |
+| `pnpm run example:build` | bundle `client/mod.ts` → `public/dist/bundle.js`       |
+| `pnpm run example:watch` | same, rebuilding on change (run the server separately) |
+| `pnpm run example:theme` | regenerate `public/theme.css`                          |
 
-`PORT` and `SSE_EXAMPLE_TOKEN` are read from the environment (defaults `8000`
-and `dev-secret`).
+`PORT` and `SSE_EXAMPLE_TOKEN` are read from the environment, or from a `.env`
+file (see `.env.example`); defaults `8000` and `dev-secret`.
 
 ## Things worth trying
 
@@ -193,7 +195,7 @@ live traffic) or you trust replay for absences it was never sized for.
 
 **`history.ts` uses the adapter seam.** `SSEService` hands every publish and
 broadcast to `adapter.publish(envelope)` after local delivery — the one place
-all traffic converges. A real deployment puts Redis or Deno KV there; here a
+all traffic converges. A real deployment puts Redis there; here a
 decorator records messages and delegates the rest. Broadcasts (`namespace:
 null`) belong to no single room and are deliberately not stored.
 

@@ -2,10 +2,11 @@
  * Reference server — a demino app implementing the wire protocol.
  *
  * Import it from `@marianmeres/sse/server` so `demino` never reaches a browser
- * bundle. It uses no Deno API: any demino 2.0 adapter serves it.
+ * bundle. It uses no runtime API of its own: any demino 2.0 adapter serves it.
  *
  * @example
  * ```ts
+ * import { serve } from "@marianmeres/demino/node";
  * import { createSSEApp } from "@marianmeres/sse/server";
  *
  * const { app, service } = createSSEApp("/sse", [], {
@@ -15,7 +16,7 @@
  *         return user ? { clientId: user.id, namespace: user.orgId } : null;
  *     },
  * });
- * Deno.serve(app);
+ * await serve(app, { port: 8000 });
  * ```
  *
  * @module

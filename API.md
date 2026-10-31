@@ -6,17 +6,21 @@ Four of them. Which one you import from decides what lands in your bundle.
 
 | Import                            | Contains                                           | Runtime                       |
 | --------------------------------- | -------------------------------------------------- | ----------------------------- |
-| `@marianmeres/sse`                | The client, plus everything in `/protocol`         | Anywhere; also on npm         |
-| `@marianmeres/sse/server`         | The reference server                               | Any demino 2.0 host; JSR only |
-| `@marianmeres/sse/protocol`       | Wire definitions and typed errors, dependency-free | Anywhere; also on npm         |
-| `@marianmeres/sse/adapters/redis` | Redis cross-instance fan-out adapter               | Any demino 2.0 host; JSR only |
+| `@marianmeres/sse`                | The client, plus everything in `/protocol`         | Wherever `EventSource` exists |
+| `@marianmeres/sse/server`         | The reference server                               | Any demino 2.0 host           |
+| `@marianmeres/sse/protocol`       | Wire definitions and typed errors, dependency-free | Anywhere                      |
+| `@marianmeres/sse/adapters/redis` | Redis cross-instance fan-out adapter               | Any demino 2.0 host           |
 
-`/server` pulls in `@marianmeres/demino` — that is the whole reason it is a
-separate entry point rather than part of the root: a client bundle never carries
-a server framework. The server uses no Deno API, so any demino 2.0 adapter serves
-it (`@marianmeres/demino/deno`, or `/node`); it is published on JSR only.
-`/protocol` is a strict subset of the root, exported separately for third-party
-implementations that want the wire types without the client. `/adapters/redis`
+All four are published to npm and JSR. `/server` pulls in `@marianmeres/demino`
+— that is the whole reason it is a separate entry point rather than part of the
+root: a client bundle never carries a server framework. On npm, demino is an
+optional peer dependency: install it alongside when you import `/server` or
+`/adapters/redis`. The server uses no runtime API of its own, so any demino 2.0
+adapter serves it (`@marianmeres/demino/node`, or `/deno`). The client needs a
+global `EventSource`: browsers and Deno have one, Node 22–26 only with
+`--experimental-eventsource`. `/protocol` is a strict subset of the root,
+exported separately for third-party implementations that want the wire types
+without the client. `/adapters/redis`
 is separate so a single-instance server never carries Redis-flavoured code; it
 is structural over `RedisLike` and depends on no concrete Redis library.
 
@@ -52,7 +56,7 @@ same thing, following the `PubSub` / `createPubSub` precedent.
 
 ### `createSSEApp(mountPath?, middlewares?, options?)`
 
-Creates the reference server. Import from `@marianmeres/sse/server` (JSR only).
+Creates the reference server. Import from `@marianmeres/sse/server`.
 
 **Parameters**
 
@@ -268,7 +272,7 @@ readonly instanceId: string   // prefix on every event id
 logger: Logger | null         // assignable; set to null to silence
 ```
 
-Usable standalone — drive it from any `Deno.serve` handler — or through
+Usable standalone — drive it from any `(req) => Response` handler — or through
 `createSSEApp`, which mounts it as a demino app. `close()` releases the
 heartbeat timer; without it the process will not exit.
 
@@ -354,7 +358,7 @@ for a cross-namespace broadcast.
 
 ### `SSEPubSubRedis`
 
-Import from `@marianmeres/sse/adapters/redis` (JSR only).
+Import from `@marianmeres/sse/adapters/redis`.
 
 ```typescript
 new SSEPubSubRedis(options: SSEPubSubRedisOptions)
@@ -376,7 +380,7 @@ logger: Logger | null                    // assignable
 | `logger`  | `Logger \| null` | `createClog("sse:redis")` | `null` silences                                                                                                                          |
 
 `RedisLike` is a structural slice of a Redis client (`isOpen`, `connect`,
-`duplicate`, `publish`, `subscribe`, `destroy`, optional `on`) — `npm:redis` v6
+`duplicate`, `publish`, `subscribe`, `destroy`, optional `on`) — node-redis v6
 satisfies it as-is, and the package takes no dependency on it. When the client
 exposes `on()`, `init()` attaches an `"error"` listener to both connections —
 a node-redis client emitting a socket error with no listener crashes the whole
@@ -392,7 +396,7 @@ at-most-once across instances; reconnect behaviour is whatever the injected
 client does (node-redis reconnects and resubscribes on its own).
 
 ```typescript
-import { createClient } from "npm:redis";
+import { createClient } from "redis";
 import { SSEPubSubRedis } from "@marianmeres/sse/adapters/redis";
 import { createSSEApp } from "@marianmeres/sse/server";
 

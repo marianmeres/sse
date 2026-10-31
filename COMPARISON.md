@@ -46,8 +46,8 @@ pretending otherwise — each leans into what its transport is good at.
 | **Binary payloads**       | Yes, via `encode`/`decode` hooks                           | No. JSON text only                                                                                                  |
 | **Re-subscribe ordering** | Load-bearing: re-subscribe must precede the outbox flush   | Not a thing. Rooms ride the connect URL, so they are registered before the first byte                               |
 | **Server runtime**        | Any demino 2.0 adapter (Deno; Node + `ws`) since ws 0.8.0  | Any demino 2.0 adapter; the core is standard Web APIs                                                               |
-| **Client runtime**        | Everywhere (`WebSocket` is global)                         | Everywhere (`EventSource` is global)                                                                                |
-| **npm**                   | Client and server since ws 0.8.0 (demino an optional peer) | Client only; the server is on JSR                                                                                   |
+| **Client runtime**        | Everywhere (`WebSocket` is global)                         | Wherever `EventSource` is global: browsers, Deno; Node 22+ only with `--experimental-eventsource`                   |
+| **npm**                   | Client and server since ws 0.8.0 (demino an optional peer) | Client and server (demino an optional peer)                                                                         |
 | **Source size**           | ~1800 lines of code                                        | ~1690 lines of code                                                                                                 |
 
 ## Where the APIs differ

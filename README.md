@@ -23,23 +23,26 @@ mountable reference server implementing the same protocol.
 - **Acknowledged publishes** — `publish()` resolves with a recipient count
 - **Scales past one instance** — a Redis fan-out adapter ships as
   `@marianmeres/sse/adapters/redis`, structural over your own Redis client
-- **Runs everywhere** — `EventSource` is a global in browsers, Deno, Node 22+
-  and Bun, so there is no polyfill and no transport dependency
+- **No transport dependency** — the client uses the global `EventSource`:
+  built into browsers and Deno, and into Node 22+ behind a flag (below)
 - **Svelte-store compatible** reactive connection state
 
 ## Installation
 
 ```bash
 npm install @marianmeres/sse
+# only if you run the reference server (/server, /adapters/redis):
+npm install @marianmeres/demino
 ```
 
-```bash
-deno add jsr:@marianmeres/sse
-```
+`@marianmeres/demino` is an optional peer dependency, so a client-only install
+never pulls in a server framework. The package is also on JSR
+(`deno add jsr:@marianmeres/sse`).
 
-> **npm ships the client only.** The reference server and the Redis adapter are
-> published on JSR only (`jsr:@marianmeres/sse/server`). They use no Deno API
-> and run under any demino 2.0 adapter. The client is fully runtime-agnostic.
+> **On Node, the client needs `--experimental-eventsource`.** Node 22–26 keep
+> the global `EventSource` behind that flag
+> (`node --experimental-eventsource app.js`). Browsers and Deno need nothing,
+> and neither does the server.
 
 ## ws or sse?
 
@@ -112,6 +115,7 @@ HTTP request, so a publish-only client never pays for one.
 ### Server
 
 ```typescript
+import { serve } from "@marianmeres/demino/node";
 import { createSSEApp } from "@marianmeres/sse/server";
 
 const { app, service } = createSSEApp("/sse", [], {
@@ -127,7 +131,8 @@ const { app, service } = createSSEApp("/sse", [], {
 // Push to connected clients from anywhere in your app.
 await service.publish("notifications", { text: "deploy finished" }, "org-123");
 
-Deno.serve(app);
+// Any demino 2.0 runtime adapter serves it — `@marianmeres/demino/deno` on Deno.
+await serve(app, { port: 8000 });
 ```
 
 Mounted routes, relative to the mount path:
@@ -145,10 +150,11 @@ Mounted routes, relative to the mount path:
 
 One process needs nothing. For a fleet, give each instance the Redis adapter
 and they gossip over a shared pub/sub channel — bring your own client
-(`npm:redis` v6 fits as-is; the package takes no Redis dependency):
+(node-redis v6, `redis` on npm, fits as-is; the package takes no Redis
+dependency):
 
 ```typescript
-import { createClient } from "npm:redis";
+import { createClient } from "redis";
 import { SSEPubSubRedis } from "@marianmeres/sse/adapters/redis";
 import { createSSEApp } from "@marianmeres/sse/server";
 
@@ -225,7 +231,7 @@ A complete reference app — a live ops feed with a fake CI/CD pipeline
 publishing into it:
 
 ```bash
-deno task example        # builds the client bundle, then serves on :8000
+pnpm run example        # builds the client bundle, then serves on :8000
 ```
 
 Pause the stream, let the pipeline run on without you, then resume: replay
