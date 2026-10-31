@@ -1,6 +1,6 @@
 {
   "name": "@marianmeres/sse",
-  "version": "2.0.0-rc.1",
+  "version": "2.0.0",
   "description": "Server-Sent Events client with namespaces, rooms and Last-Event-ID replay, plus a demino-mountable reference server and a Redis fan-out adapter.",
   "license": "MIT",
   "author": "Marian Meres",
