@@ -28,6 +28,7 @@
       "tests/**",
       "tmp/**",
       "biome.json",
+      "deno.lock",
       "package.json",
       "pnpm-lock.yaml",
       "pnpm-workspace.yaml",
