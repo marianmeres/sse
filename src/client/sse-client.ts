@@ -16,13 +16,6 @@ import {
 	OP,
 	SSE_EVENT,
 } from "../protocol/constants.ts";
-import type {
-	ClientOp,
-	RpcResult,
-	SSEHello,
-	SSEMessage,
-	SSEPublishResult,
-} from "../protocol/frames.ts";
 import {
 	SSEConnectTimeoutError,
 	SSEDisposedError,
@@ -31,6 +24,13 @@ import {
 	SSETerminatedError,
 	SSETimeoutError,
 } from "../protocol/errors.ts";
+import type {
+	ClientOp,
+	RpcResult,
+	SSEHello,
+	SSEMessage,
+	SSEPublishResult,
+} from "../protocol/frames.ts";
 import { backoffDelay } from "./backoff.ts";
 import { type MessageHandler, RoomRegistry } from "./rooms.ts";
 import { StalenessWatchdog } from "./staleness.ts";
@@ -288,9 +288,11 @@ export class SSEClient<TAuth = unknown> {
 
 	#reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 	#connectTimer: ReturnType<typeof setTimeout> | undefined;
-	#connectDeferred:
-		| { promise: Promise<void>; resolve: () => void; reject: (e: Error) => void }
-		| null = null;
+	#connectDeferred: {
+		promise: Promise<void>;
+		resolve: () => void;
+		reject: (e: Error) => void;
+	} | null = null;
 	/** Set by `disconnect()`/`dispose()` so a trailing error is not retried. */
 	#intentional = false;
 	#wakeListeners: Array<() => void> = [];
@@ -316,8 +318,7 @@ export class SSEClient<TAuth = unknown> {
 		this.#autoConnect = options.autoConnect ?? true;
 		this.#withCredentials = !!options.withCredentials;
 		this.#reconnectDelay = options.reconnectDelay ?? DEFAULTS.reconnectDelay;
-		this.#reconnectDelayMax = options.reconnectDelayMax ??
-			DEFAULTS.reconnectDelayMax;
+		this.#reconnectDelayMax = options.reconnectDelayMax ?? DEFAULTS.reconnectDelayMax;
 		this.#terminalStatusCodes = new Set(
 			options.terminalStatusCodes ?? DEFAULT_TERMINAL_STATUS_CODES,
 		);
@@ -582,10 +583,7 @@ export class SSEClient<TAuth = unknown> {
 	 * calls are ordinary HTTP requests with no dependence on the stream, so a
 	 * publish-only client never pays for one.
 	 */
-	async publish<T = unknown>(
-		room: string,
-		payload: T,
-	): Promise<SSEPublishResult> {
+	async publish<T = unknown>(room: string, payload: T): Promise<SSEPublishResult> {
 		this.#assertUsable();
 		const result = await this.#rpc({
 			op: OP.PUB,
@@ -604,10 +602,7 @@ export class SSEClient<TAuth = unknown> {
 	 * crossing an isolation boundary deserves its own name and its own
 	 * server-side check — `allowBroadcast` **denies by default**.
 	 */
-	async broadcast<T = unknown>(
-		room: string,
-		payload: T,
-	): Promise<SSEPublishResult> {
+	async broadcast<T = unknown>(room: string, payload: T): Promise<SSEPublishResult> {
 		this.#assertUsable();
 		const result = await this.#rpc({
 			op: OP.BROADCAST,
@@ -622,9 +617,7 @@ export class SSEClient<TAuth = unknown> {
 	// ------------------------------------------------------------ the stream
 
 	#ensureStarted(): void {
-		if (
-			this.#state === "idle" || this.#state === "terminated"
-		) {
+		if (this.#state === "idle" || this.#state === "terminated") {
 			void this.connect().catch(() => {
 				// connect()'s rejection is already surfaced as an `error` event
 				// and to whoever awaited it; an unhandled rejection here would
@@ -637,63 +630,65 @@ export class SSEClient<TAuth = unknown> {
 		if (!this.#setState("connecting")) return;
 
 		const generation = ++this.#generation;
-		void this.#buildStreamUrl().then((url) => {
-			if (generation !== this.#generation || this.#state === "disposed") return;
+		void this.#buildStreamUrl()
+			.then((url) => {
+				if (generation !== this.#generation || this.#state === "disposed") return;
 
-			this.logger?.debug?.(`opening stream (attempt ${this.#attempt})`);
-			let es: EventSource;
-			try {
-				es = new EventSource(url.href, {
-					withCredentials: this.#withCredentials,
-				});
-			} catch (e) {
-				this.#fail(e, "EventSource construction");
-				this.#scheduleReconnect();
-				return;
-			}
-			this.#es = es;
-
-			es.onopen = () => {
-				if (generation !== this.#generation) return;
-				this.logger?.debug?.("stream open");
-				this.#emit("open", undefined);
-				this.#watchdog.start();
-			};
-
-			es.onerror = () => {
-				if (generation !== this.#generation) return;
-				this.#onStreamError(es);
-			};
-
-			es.addEventListener(SSE_EVENT.HELLO, (ev) => {
-				if (generation !== this.#generation) return;
-				this.#watchdog.alive();
-				this.#onHello(ev as MessageEvent);
-			});
-
-			es.addEventListener(SSE_EVENT.MESSAGE, (ev) => {
-				if (generation !== this.#generation) return;
-				this.#watchdog.alive();
-				this.#onMessage(ev as MessageEvent);
-			});
-
-			es.addEventListener(SSE_EVENT.HEARTBEAT, (ev) => {
-				if (generation !== this.#generation) return;
-				this.#watchdog.alive();
+				this.logger?.debug?.(`opening stream (attempt ${this.#attempt})`);
+				let es: EventSource;
 				try {
-					this.#emit("heartbeat", JSON.parse((ev as MessageEvent).data));
-				} catch {
-					// A malformed heartbeat still proves liveness, which is the
-					// only thing it is for.
+					es = new EventSource(url.href, {
+						withCredentials: this.#withCredentials,
+					});
+				} catch (e) {
+					this.#fail(e, "EventSource construction");
+					this.#scheduleReconnect();
+					return;
 				}
+				this.#es = es;
+
+				es.onopen = () => {
+					if (generation !== this.#generation) return;
+					this.logger?.debug?.("stream open");
+					this.#emit("open", undefined);
+					this.#watchdog.start();
+				};
+
+				es.onerror = () => {
+					if (generation !== this.#generation) return;
+					this.#onStreamError(es);
+				};
+
+				es.addEventListener(SSE_EVENT.HELLO, (ev) => {
+					if (generation !== this.#generation) return;
+					this.#watchdog.alive();
+					this.#onHello(ev as MessageEvent);
+				});
+
+				es.addEventListener(SSE_EVENT.MESSAGE, (ev) => {
+					if (generation !== this.#generation) return;
+					this.#watchdog.alive();
+					this.#onMessage(ev as MessageEvent);
+				});
+
+				es.addEventListener(SSE_EVENT.HEARTBEAT, (ev) => {
+					if (generation !== this.#generation) return;
+					this.#watchdog.alive();
+					try {
+						this.#emit("heartbeat", JSON.parse((ev as MessageEvent).data));
+					} catch {
+						// A malformed heartbeat still proves liveness, which is the
+						// only thing it is for.
+					}
+				});
+			})
+			.catch((e) => {
+				if (generation !== this.#generation) return;
+				// Almost always a throwing auth() — retrying is right, the token
+				// provider may simply be briefly unavailable.
+				this.#fail(e, "stream setup");
+				this.#scheduleReconnect();
 			});
-		}).catch((e) => {
-			if (generation !== this.#generation) return;
-			// Almost always a throwing auth() — retrying is right, the token
-			// provider may simply be briefly unavailable.
-			this.#fail(e, "stream setup");
-			this.#scheduleReconnect();
-		});
 	}
 
 	async #buildStreamUrl(): Promise<URL> {
@@ -797,10 +792,8 @@ export class SSEClient<TAuth = unknown> {
 		}
 
 		this.#emit("message", message);
-		this.#rooms.deliver(
-			message.room,
-			message,
-			(e) => this.#fail(e, `handler for room "${message.room}"`),
+		this.#rooms.deliver(message.room, message, (e) =>
+			this.#fail(e, `handler for room "${message.room}"`),
 		);
 	}
 
@@ -903,9 +896,7 @@ export class SSEClient<TAuth = unknown> {
 			this.#reconnectDelay,
 			this.#reconnectDelayMax,
 		);
-		this.logger?.debug?.(
-			`reconnecting in ${delay}ms (attempt ${this.#attempt})`,
-		);
+		this.logger?.debug?.(`reconnecting in ${delay}ms (attempt ${this.#attempt})`);
 		this.#emit("reconnecting", { attempt: this.#attempt, delay });
 
 		clearTimeout(this.#reconnectTimer);
@@ -1077,8 +1068,7 @@ export class SSEClient<TAuth = unknown> {
 		return {
 			state: this.#state,
 			connected: this.#state === "open",
-			connecting: this.#state === "connecting" ||
-				this.#state === "reconnecting",
+			connecting: this.#state === "connecting" || this.#state === "reconnecting",
 			attempt: this.#attempt,
 			lastError: this.#lastError,
 		};

@@ -86,56 +86,65 @@ test("concurrent connect calls share one attempt", async () => {
 });
 
 test("verify overrides the client-proposed id and namespace", async () => {
-	await withServer({
-		verify: () => ({ clientId: "server-chosen", namespace: "forced" }),
-	}, async (server) => {
-		const sse = client(server, { clientId: "i-wanted-this", namespace: "mine" });
-		try {
-			await sse.connect();
-			assert.deepEqual(sse.clientId, "server-chosen");
-			assert.deepEqual(sse.namespace, "forced");
-		} finally {
-			sse.dispose();
-		}
-	});
+	await withServer(
+		{
+			verify: () => ({ clientId: "server-chosen", namespace: "forced" }),
+		},
+		async (server) => {
+			const sse = client(server, { clientId: "i-wanted-this", namespace: "mine" });
+			try {
+				await sse.connect();
+				assert.deepEqual(sse.clientId, "server-chosen");
+				assert.deepEqual(sse.namespace, "forced");
+			} finally {
+				sse.dispose();
+			}
+		},
+	);
 });
 
 test("verify receives the auth payload verbatim", async () => {
 	const seen: unknown[] = [];
-	await withServer({
-		verify: (payload) => {
-			seen.push(payload);
-			return {};
+	await withServer(
+		{
+			verify: (payload) => {
+				seen.push(payload);
+				return {};
+			},
 		},
-	}, async (server) => {
-		const sse = client(server, { auth: () => ({ token: "abc", n: 1 }) });
-		try {
-			await sse.connect();
-			assert.deepEqual(seen[0], { token: "abc", n: 1 });
-		} finally {
-			sse.dispose();
-		}
-	});
+		async (server) => {
+			const sse = client(server, { auth: () => ({ token: "abc", n: 1 }) });
+			try {
+				await sse.connect();
+				assert.deepEqual(seen[0], { token: "abc", n: 1 });
+			} finally {
+				sse.dispose();
+			}
+		},
+	);
 });
 
 test("a bare string auth payload survives the round trip", async () => {
 	// Always-JSON serialisation exists so a token that looks like a number
 	// ("123") does not arrive as one.
 	const seen: unknown[] = [];
-	await withServer({
-		verify: (payload) => {
-			seen.push(payload);
-			return {};
+	await withServer(
+		{
+			verify: (payload) => {
+				seen.push(payload);
+				return {};
+			},
 		},
-	}, async (server) => {
-		const sse = client(server, { auth: () => "123" });
-		try {
-			await sse.connect();
-			assert.deepEqual(seen[0], "123");
-		} finally {
-			sse.dispose();
-		}
-	});
+		async (server) => {
+			const sse = client(server, { auth: () => "123" });
+			try {
+				await sse.connect();
+				assert.deepEqual(seen[0], "123");
+			} finally {
+				sse.dispose();
+			}
+		},
+	);
 });
 
 // ------------------------------------------------------------ subscribing
@@ -352,22 +361,27 @@ test("allowBroadcast opens the namespace boundary", async () => {
 
 test("allowBroadcast sees the requesting context", async () => {
 	const seen: Array<{ clientId: string; namespace: string; room: string }> = [];
-	await withServer({
-		verify: () => ({ meta: { role: "admin" } }),
-		allowBroadcast: (ctx, room) => {
-			seen.push({ clientId: ctx.clientId, namespace: ctx.namespace, room });
-			return ctx.meta.role === "admin";
+	await withServer(
+		{
+			verify: () => ({ meta: { role: "admin" } }),
+			allowBroadcast: (ctx, room) => {
+				seen.push({ clientId: ctx.clientId, namespace: ctx.namespace, room });
+				return ctx.meta.role === "admin";
+			},
 		},
-	}, async (server) => {
-		const sse = client(server, { clientId: "c1", auth: () => "t" });
-		try {
-			await sse.connect();
-			await sse.broadcast("alerts", { v: 1 });
-			assert.deepEqual(seen, [{ clientId: "c1", namespace: "ns", room: "alerts" }]);
-		} finally {
-			sse.dispose();
-		}
-	});
+		async (server) => {
+			const sse = client(server, { clientId: "c1", auth: () => "t" });
+			try {
+				await sse.connect();
+				await sse.broadcast("alerts", { v: 1 });
+				assert.deepEqual(seen, [
+					{ clientId: "c1", namespace: "ns", room: "alerts" },
+				]);
+			} finally {
+				sse.dispose();
+			}
+		},
+	);
 });
 
 test("a client cannot publish into a namespace verify did not grant", async () => {
@@ -424,40 +438,43 @@ test("injection routes are not mounted without httpAuth", async () => {
 });
 
 test("injection routes work behind httpAuth", async () => {
-	await withServer({
-		httpAuth: (req: Request) => {
-			if (req.headers.get("x-key") !== "secret") {
-				return new Response("nope", { status: 401 });
+	await withServer(
+		{
+			httpAuth: (req: Request) => {
+				if (req.headers.get("x-key") !== "secret") {
+					return new Response("nope", { status: 401 });
+				}
+			},
+		},
+		async (server) => {
+			const sse = client(server);
+			try {
+				const got: SSEMessage[] = [];
+				await sse.connect();
+				await sse.subscribe("chat", (m) => got.push(m));
+
+				const denied = await fetch(`${server.url}/publish/ns/chat`, {
+					method: "POST",
+					body: JSON.stringify({ v: 0 }),
+				});
+				await denied.body?.cancel();
+				assert.deepEqual(denied.status, 401);
+
+				const res = await fetch(`${server.url}/publish/ns/chat`, {
+					method: "POST",
+					headers: { "x-key": "secret", "content-type": "application/json" },
+					body: JSON.stringify({ v: 1 }),
+				});
+				assert.deepEqual((await res.json()).recipients, 1);
+
+				await until(() => got.length === 1, "injected message delivered");
+				assert.deepEqual(got[0].payload, { v: 1 });
+				assert.deepEqual(got[0].from, null);
+			} finally {
+				sse.dispose();
 			}
 		},
-	}, async (server) => {
-		const sse = client(server);
-		try {
-			const got: SSEMessage[] = [];
-			await sse.connect();
-			await sse.subscribe("chat", (m) => got.push(m));
-
-			const denied = await fetch(`${server.url}/publish/ns/chat`, {
-				method: "POST",
-				body: JSON.stringify({ v: 0 }),
-			});
-			await denied.body?.cancel();
-			assert.deepEqual(denied.status, 401);
-
-			const res = await fetch(`${server.url}/publish/ns/chat`, {
-				method: "POST",
-				headers: { "x-key": "secret", "content-type": "application/json" },
-				body: JSON.stringify({ v: 1 }),
-			});
-			assert.deepEqual((await res.json()).recipients, 1);
-
-			await until(() => got.length === 1, "injected message delivered");
-			assert.deepEqual(got[0].payload, { v: 1 });
-			assert.deepEqual(got[0].from, null);
-		} finally {
-			sse.dispose();
-		}
-	});
+	);
 });
 
 test("the broadcast injection route crosses namespaces", async () => {
@@ -515,18 +532,22 @@ test("stats reports connections, rooms and namespaces", async () => {
 });
 
 test("stats is guarded when httpAuth is supplied", async () => {
-	await withServer({
-		httpAuth: (req: Request) => {
-			if (!req.headers.get("x-key")) return new Response("nope", { status: 401 });
+	await withServer(
+		{
+			httpAuth: (req: Request) => {
+				if (!req.headers.get("x-key"))
+					return new Response("nope", { status: 401 });
+			},
 		},
-	}, async (server) => {
-		const denied = await fetch(`${server.url}/stats`);
-		await denied.body?.cancel();
-		assert.deepEqual(denied.status, 401);
+		async (server) => {
+			const denied = await fetch(`${server.url}/stats`);
+			await denied.body?.cancel();
+			assert.deepEqual(denied.status, 401);
 
-		const ok = await fetch(`${server.url}/stats`, { headers: { "x-key": "y" } });
-		assert.deepEqual((await ok.json()).connections, 0);
-	});
+			const ok = await fetch(`${server.url}/stats`, { headers: { "x-key": "y" } });
+			assert.deepEqual((await ok.json()).connections, 0);
+		},
+	);
 });
 
 test("ping answers 204 when unauthenticated servers accept everyone", async () => {
@@ -538,19 +559,22 @@ test("ping answers 204 when unauthenticated servers accept everyone", async () =
 });
 
 test("ping reflects the auth verdict", async () => {
-	await withServer({
-		verify: (payload) => (payload === "good" ? {} : null),
-	}, async (server) => {
-		const bad = await fetch(`${server.url}/ping`);
-		await bad.body?.cancel();
-		assert.deepEqual(bad.status, 401);
+	await withServer(
+		{
+			verify: (payload) => (payload === "good" ? {} : null),
+		},
+		async (server) => {
+			const bad = await fetch(`${server.url}/ping`);
+			await bad.body?.cancel();
+			assert.deepEqual(bad.status, 401);
 
-		const good = await fetch(
-			`${server.url}/ping?auth=${encodeURIComponent(JSON.stringify("good"))}`,
-		);
-		await good.body?.cancel();
-		assert.deepEqual(good.status, 204);
-	});
+			const good = await fetch(
+				`${server.url}/ping?auth=${encodeURIComponent(JSON.stringify("good"))}`,
+			);
+			await good.body?.cancel();
+			assert.deepEqual(good.status, 204);
+		},
+	);
 });
 
 // ------------------------------------------------------------- validation
@@ -626,10 +650,7 @@ test("the per-client room cap is enforced", async () => {
 			await sse.connect();
 			await sse.subscribe("a", () => {});
 			await sse.subscribe("b", () => {});
-			await assert.rejects(
-				() => sse.subscribe("c", () => {}),
-				SSERemoteError,
-			);
+			await assert.rejects(() => sse.subscribe("c", () => {}), SSERemoteError);
 			// The refused room must not linger locally.
 			assert.deepEqual(sse.isSubscribed("c"), false);
 		} finally {
@@ -662,10 +683,9 @@ test("a malformed auth payload is a 400, not a 401", async () => {
 
 test("the stream opens with retry then hello", async () => {
 	await withServer({ retryInterval: 4_000 }, async (server) => {
-		const events = await readStream(
-			`${server.url}/events?clientId=c1&namespace=ns`,
-			{ count: 1 },
-		);
+		const events = await readStream(`${server.url}/events?clientId=c1&namespace=ns`, {
+			count: 1,
+		});
 		assert.deepEqual(events.length, 1);
 		assert.deepEqual(events[0].event, "hello");
 		assert.deepEqual(events[0].id, null, "hello must not move the resume point");
@@ -700,14 +720,17 @@ test("messages carry an instance-prefixed id", async () => {
 
 test("heartbeats are real events and carry no id", async () => {
 	await withServer({ heartbeatInterval: 60 }, async (server) => {
-		const events = await readStream(
-			`${server.url}/events?clientId=c1&namespace=ns`,
-			{ count: 3 },
-		);
+		const events = await readStream(`${server.url}/events?clientId=c1&namespace=ns`, {
+			count: 3,
+		});
 		assert.deepEqual(events[0].event, "hello");
 		assert.deepEqual(events[1].event, "heartbeat");
 		assert.deepEqual(events[2].event, "heartbeat");
-		assert.deepEqual(events[1].id, null, "a heartbeat must not move the resume point");
+		assert.deepEqual(
+			events[1].id,
+			null,
+			"a heartbeat must not move the resume point",
+		);
 		assert.ok((events[1].json as { timestamp: number }).timestamp > 0);
 	});
 });
@@ -730,10 +753,9 @@ test("the stream sets the headers proxies need", async () => {
 	await withServer({}, async (server) => {
 		const controller = new AbortController();
 		try {
-			const res = await fetch(
-				`${server.url}/events?clientId=c1&namespace=ns`,
-				{ signal: controller.signal },
-			);
+			const res = await fetch(`${server.url}/events?clientId=c1&namespace=ns`, {
+				signal: controller.signal,
+			});
 			assert.deepEqual(
 				res.headers.get("content-type"),
 				"text/event-stream; charset=utf-8",

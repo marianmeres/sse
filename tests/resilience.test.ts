@@ -256,7 +256,10 @@ test("a reconnect replays what was missed", async () => {
 		await sse.connect();
 		await until(() => got.length === 3, "the gap was replayed");
 
-		assert.deepEqual(got.map((m) => (m.payload as { n: number }).n), [1, 2, 3]);
+		assert.deepEqual(
+			got.map((m) => (m.payload as { n: number }).n),
+			[1, 2, 3],
+		);
 		assert.deepEqual(hellos.at(-1)!.resumed, true);
 		assert.deepEqual(hellos.at(-1)!.gap, false);
 	} finally {
@@ -318,10 +321,10 @@ test("an evicted resume point is reported as a gap", async () => {
 		assert.deepEqual(hello.gap, true, "messages 2 and 3 are genuinely gone");
 
 		// Only what the buffer still holds comes back.
-		assert.deepEqual(events.slice(1).map((e) => (e.json as SSEMessage).payload), [
-			{ n: 4 },
-			{ n: 5 },
-		]);
+		assert.deepEqual(
+			events.slice(1).map((e) => (e.json as SSEMessage).payload),
+			[{ n: 4 }, { n: 5 }],
+		);
 	} finally {
 		await server.stop();
 	}
@@ -372,10 +375,10 @@ test("replay only returns rooms the client actually holds", async () => {
 			`${server.url}/events?clientId=c1&namespace=ns&rooms=chat&lastEventId=${resume}`,
 			{ count: 3 },
 		);
-		assert.deepEqual(events.slice(1).map((e) => (e.json as SSEMessage).payload), [
-			{ n: 1 },
-			{ n: 3 },
-		]);
+		assert.deepEqual(
+			events.slice(1).map((e) => (e.json as SSEMessage).payload),
+			[{ n: 1 }, { n: 3 }],
+		);
 	} finally {
 		await server.stop();
 	}

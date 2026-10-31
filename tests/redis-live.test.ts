@@ -13,10 +13,9 @@ import { env } from "node:process";
 import { test } from "node:test";
 import { base36 } from "@marianmeres/uid";
 import { createClient } from "redis";
-
+import { SSEPubSubRedis } from "../src/adapters/redis.ts";
 import { createSSEClient, type SSEClient } from "../src/client/sse-client.ts";
 import type { SSEMessage } from "../src/protocol/frames.ts";
-import { SSEPubSubRedis } from "../src/adapters/redis.ts";
 import type { SSEBroadcastEnvelope } from "../src/server/mod.ts";
 import { sleep, startServer, until } from "./_helpers.ts";
 
@@ -80,7 +79,9 @@ test("live redis: a frame crosses adapters and never echoes back", { skip }, asy
 	}
 });
 
-test("live redis: two services fan out, no double delivery at the origin", { skip }, async () => {
+test("live redis: two services fan out, no double delivery at the origin", {
+	skip,
+}, async () => {
 	const channel = `sse_test_${base36(8)}`;
 	const adapterA = liveAdapter(channel);
 	const adapterB = liveAdapter(channel);

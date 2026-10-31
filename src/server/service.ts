@@ -196,19 +196,15 @@ export class SSEService {
 	 * @param options - {@link SSEServiceOptions}; every field is optional
 	 */
 	constructor(options: SSEServiceOptions = {}) {
-		this.logger = options.logger === undefined
-			? createClog("sse:server")
-			: options.logger;
+		this.logger =
+			options.logger === undefined ? createClog("sse:server") : options.logger;
 
 		this.#verify = options.verify;
 		this.#allowBroadcast = options.allowBroadcast;
-		this.#heartbeatInterval = options.heartbeatInterval ??
-			DEFAULTS.heartbeatInterval;
+		this.#heartbeatInterval = options.heartbeatInterval ?? DEFAULTS.heartbeatInterval;
 		this.#retryInterval = options.retryInterval ?? DEFAULTS.retryInterval;
-		this.#maxRoomNameLength = options.maxRoomNameLength ??
-			DEFAULTS.maxRoomNameLength;
-		this.#maxRoomsPerClient = options.maxRoomsPerClient ??
-			DEFAULTS.maxRoomsPerClient;
+		this.#maxRoomNameLength = options.maxRoomNameLength ?? DEFAULTS.maxRoomNameLength;
+		this.#maxRoomsPerClient = options.maxRoomsPerClient ?? DEFAULTS.maxRoomsPerClient;
 		this.#adapter = options.adapter ?? new SSEPubSubLocal();
 		this.#replay = new ReplayBuffer(
 			options.replayBufferSize ?? DEFAULTS.replayBufferSize,
@@ -231,28 +227,18 @@ export class SSEService {
 	 *
 	 * @param extraHeaders - merged into the response, so CORS middleware works
 	 */
-	async handleStream(
-		request: Request,
-		extraHeaders?: Headers,
-	): Promise<Response> {
+	async handleStream(request: Request, extraHeaders?: Headers): Promise<Response> {
 		const url = new URL(request.url);
 
-		const auth = await this.#resolveAuth(
-			request,
-			url.searchParams.get(AUTH_PARAM),
-		);
+		const auth = await this.#resolveAuth(request, url.searchParams.get(AUTH_PARAM));
 		if (!auth.ok) return auth.response;
 
-		const clientId = auth.result.clientId || url.searchParams.get("clientId") ||
-			`c_${base36(12)}`;
-		const namespace = auth.result.namespace ||
-			url.searchParams.get("namespace") || "";
+		const clientId =
+			auth.result.clientId || url.searchParams.get("clientId") || `c_${base36(12)}`;
+		const namespace =
+			auth.result.namespace || url.searchParams.get("namespace") || "";
 		if (!namespace) {
-			return fail(
-				ERROR_CODE.BAD_REQUEST,
-				"A namespace is required",
-				400,
-			);
+			return fail(ERROR_CODE.BAD_REQUEST, "A namespace is required", 400);
 		}
 
 		const requested = (url.searchParams.get("rooms") ?? "")
@@ -266,7 +252,8 @@ export class SSEService {
 		// the query parameter is how a manually rebuilt EventSource carries the
 		// resume point, since it cannot set headers. Header wins — it is the
 		// fresher of the two.
-		const resumeRaw = request.headers.get("last-event-id") ||
+		const resumeRaw =
+			request.headers.get("last-event-id") ||
 			url.searchParams.get(LAST_EVENT_ID_PARAM);
 		const resume = parseEventId(resumeRaw);
 
@@ -304,18 +291,14 @@ export class SSEService {
 
 				const usable = !!resume && resume.instanceId === this.instanceId;
 				const oldest = this.#replay.oldestSeq;
-				const gap = usable &&
+				const gap =
+					usable &&
 					this.#replay.enabled &&
 					oldest !== null &&
 					resume.seq + 1 < oldest;
 
 				const entries = usable
-					? this.#replay.since(
-						resume.seq,
-						upTo,
-						namespace,
-						conn.rooms,
-					)
+					? this.#replay.since(resume.seq, upTo, namespace, conn.rooms)
 					: [];
 
 				const hello: SSEHello = {
@@ -376,10 +359,7 @@ export class SSEService {
 			return fail(ERROR_CODE.BAD_REQUEST, "Missing operation", 400);
 		}
 
-		const auth = await this.#resolveAuth(
-			request,
-			request.headers.get(AUTH_HEADER),
-		);
+		const auth = await this.#resolveAuth(request, request.headers.get(AUTH_HEADER));
 		if (!auth.ok) return auth.response;
 
 		const clientId = auth.result.clientId || op.clientId;
@@ -424,12 +404,15 @@ export class SSEService {
 				let allowed = false;
 				try {
 					allowed = this.#allowBroadcast
-						? await this.#allowBroadcast({
-							clientId,
-							namespace,
-							meta: auth.result.meta ?? {},
-							request,
-						}, op.room)
+						? await this.#allowBroadcast(
+								{
+									clientId,
+									namespace,
+									meta: auth.result.meta ?? {},
+									request,
+								},
+								op.room,
+							)
 						: false;
 				} catch (e) {
 					this.logger?.debug?.(`allowBroadcast threw: ${e}`);
@@ -624,23 +607,17 @@ export class SSEService {
 	async #resolveAuth(
 		request: Request,
 		raw: string | null,
-	): Promise<
-		{ ok: true; result: AuthResult } | { ok: false; response: Response }
-	> {
+	): Promise<{ ok: true; result: AuthResult } | { ok: false; response: Response }> {
 		if (!this.#verify) return { ok: true, result: {} };
 
-		let payload: unknown = undefined;
+		let payload: unknown;
 		if (raw !== null) {
 			try {
 				payload = JSON.parse(raw);
 			} catch {
 				return {
 					ok: false,
-					response: fail(
-						ERROR_CODE.BAD_REQUEST,
-						"Malformed auth payload",
-						400,
-					),
+					response: fail(ERROR_CODE.BAD_REQUEST, "Malformed auth payload", 400),
 				};
 			}
 		}
@@ -680,11 +657,7 @@ export class SSEService {
 	 * @param namespace - target namespace, or `null` to cross all of them
 	 * @returns how many streams received it, on this instance
 	 */
-	#deliverLocal(
-		namespace: string | null,
-		message: SSEMessage,
-		seq: number,
-	): number {
+	#deliverLocal(namespace: string | null, message: SSEMessage, seq: number): number {
 		const byNamespace = this.#index.get(message.room);
 		if (!byNamespace) return 0;
 

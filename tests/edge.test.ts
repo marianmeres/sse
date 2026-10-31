@@ -180,13 +180,17 @@ test("rpc enforces auth on upstream calls, not just the stream", async () => {
 		});
 		assert.deepEqual(denied.status, 401);
 
-		const allowed = await rpc(server.url, {
-			op: "pub",
-			clientId: "c1",
-			namespace: "ns",
-			room: "chat",
-			payload: {},
-		}, { "x-sse-auth": JSON.stringify("good") });
+		const allowed = await rpc(
+			server.url,
+			{
+				op: "pub",
+				clientId: "c1",
+				namespace: "ns",
+				room: "chat",
+				payload: {},
+			},
+			{ "x-sse-auth": JSON.stringify("good") },
+		);
 		assert.deepEqual(allowed.status, 200);
 	} finally {
 		await server.stop();
@@ -217,10 +221,7 @@ test("a throwing allowBroadcast denies rather than crashing", async () => {
 	const sse = client(server.url);
 	try {
 		await sse.connect();
-		const error = await rejection(
-			() => sse.broadcast("alerts", {}),
-			SSERemoteError,
-		);
+		const error = await rejection(() => sse.broadcast("alerts", {}), SSERemoteError);
 		assert.deepEqual(error.status, 403);
 	} finally {
 		sse.dispose();
@@ -530,49 +531,45 @@ test("an unreachable probe is treated as retryable", async () => {
 	let failEvents = true;
 	let hangPing = true;
 
-	const server = await listen(
-		async (req) => {
-			const url = new URL(req.url);
-			if (url.pathname === "/sse/ping") {
-				// Hang until the client's fetchTimeout aborts us. Honouring the
-				// signal matters: otherwise the handler outlives the test and
-				// blocks shutdown.
-				if (hangPing) {
-					await new Promise((resolve) => {
-						const timer = setTimeout(resolve, 30_000);
-						req.signal.addEventListener("abort", () => {
-							clearTimeout(timer);
-							resolve(undefined);
-						});
+	const server = await listen(async (req) => {
+		const url = new URL(req.url);
+		if (url.pathname === "/sse/ping") {
+			// Hang until the client's fetchTimeout aborts us. Honouring the
+			// signal matters: otherwise the handler outlives the test and
+			// blocks shutdown.
+			if (hangPing) {
+				await new Promise((resolve) => {
+					const timer = setTimeout(resolve, 30_000);
+					req.signal.addEventListener("abort", () => {
+						clearTimeout(timer);
+						resolve(undefined);
 					});
-				}
-				return new Response(null, { status: 204 });
+				});
 			}
-			if (failEvents) return new Response("nope", { status: 500 });
+			return new Response(null, { status: 204 });
+		}
+		if (failEvents) return new Response("nope", { status: 500 });
 
-			const body = new ReadableStream<Uint8Array>({
-				start(ctrl) {
-					ctrl.enqueue(
-						new TextEncoder().encode(
-							`event: hello\ndata: ${
-								JSON.stringify({
-									clientId: "c1",
-									namespace: "ns",
-									protocol: 1,
-									heartbeatInterval: 0,
-									resumed: false,
-									gap: false,
-								})
-							}\n\n`,
-						),
-					);
-				},
-			});
-			return new Response(body, {
-				headers: { "content-type": "text/event-stream" },
-			});
-		},
-	);
+		const body = new ReadableStream<Uint8Array>({
+			start(ctrl) {
+				ctrl.enqueue(
+					new TextEncoder().encode(
+						`event: hello\ndata: ${JSON.stringify({
+							clientId: "c1",
+							namespace: "ns",
+							protocol: 1,
+							heartbeatInterval: 0,
+							resumed: false,
+							gap: false,
+						})}\n\n`,
+					),
+				);
+			},
+		});
+		return new Response(body, {
+			headers: { "content-type": "text/event-stream" },
+		});
+	});
 	const port = server.port;
 	const sse = client(`http://127.0.0.1:${port}/sse`, { fetchTimeout: 100 });
 
@@ -597,40 +594,38 @@ test("an unreachable probe is treated as retryable", async () => {
 
 /** Serves a stream whose `hello` or `message` payload is not JSON. */
 async function startGarbageServer(what: "hello" | "message") {
-	const server = await listen(
-		(req) => {
-			const url = new URL(req.url);
-			if (url.pathname === "/sse/ping") return new Response(null, { status: 204 });
+	const server = await listen((req) => {
+		const url = new URL(req.url);
+		if (url.pathname === "/sse/ping") return new Response(null, { status: 204 });
 
-			const body = new ReadableStream<Uint8Array>({
-				start(ctrl) {
-					const enc = new TextEncoder();
-					if (what === "hello") {
-						ctrl.enqueue(enc.encode("event: hello\ndata: not-json\n\n"));
-					} else {
-						ctrl.enqueue(enc.encode(
-							`event: hello\ndata: ${
-								JSON.stringify({
-									clientId: "c1",
-									namespace: "ns",
-									protocol: 1,
-									heartbeatInterval: 0,
-									resumed: false,
-									gap: false,
-								})
-							}\n\n`,
-						));
-						ctrl.enqueue(enc.encode(
-							"id: x:1\nevent: message\ndata: not-json\n\n",
-						));
-					}
-				},
-			});
-			return new Response(body, {
-				headers: { "content-type": "text/event-stream" },
-			});
-		},
-	);
+		const body = new ReadableStream<Uint8Array>({
+			start(ctrl) {
+				const enc = new TextEncoder();
+				if (what === "hello") {
+					ctrl.enqueue(enc.encode("event: hello\ndata: not-json\n\n"));
+				} else {
+					ctrl.enqueue(
+						enc.encode(
+							`event: hello\ndata: ${JSON.stringify({
+								clientId: "c1",
+								namespace: "ns",
+								protocol: 1,
+								heartbeatInterval: 0,
+								resumed: false,
+								gap: false,
+							})}\n\n`,
+						),
+					);
+					ctrl.enqueue(
+						enc.encode("id: x:1\nevent: message\ndata: not-json\n\n"),
+					);
+				}
+			},
+		});
+		return new Response(body, {
+			headers: { "content-type": "text/event-stream" },
+		});
+	});
 	const port = server.port;
 	return {
 		url: `http://127.0.0.1:${port}/sse`,
@@ -671,37 +666,35 @@ test("a malformed message is reported rather than crashing", async () => {
 });
 
 test("a malformed heartbeat still counts as proof of life", async () => {
-	const server = await listen(
-		(req) => {
-			const url = new URL(req.url);
-			if (url.pathname === "/sse/ping") return new Response(null, { status: 204 });
-			const body = new ReadableStream<Uint8Array>({
-				start(ctrl) {
-					const enc = new TextEncoder();
-					ctrl.enqueue(enc.encode(
-						`event: hello\ndata: ${
-							JSON.stringify({
-								clientId: "c1",
-								namespace: "ns",
-								protocol: 1,
-								heartbeatInterval: 0,
-								resumed: false,
-								gap: false,
-							})
-						}\n\n`,
-					));
-					const beat = () =>
-						ctrl.enqueue(enc.encode("event: heartbeat\ndata: nope\n\n"));
-					beat();
-					const timer = setInterval(beat, 50);
-					req.signal.addEventListener("abort", () => clearInterval(timer));
-				},
-			});
-			return new Response(body, {
-				headers: { "content-type": "text/event-stream" },
-			});
-		},
-	);
+	const server = await listen((req) => {
+		const url = new URL(req.url);
+		if (url.pathname === "/sse/ping") return new Response(null, { status: 204 });
+		const body = new ReadableStream<Uint8Array>({
+			start(ctrl) {
+				const enc = new TextEncoder();
+				ctrl.enqueue(
+					enc.encode(
+						`event: hello\ndata: ${JSON.stringify({
+							clientId: "c1",
+							namespace: "ns",
+							protocol: 1,
+							heartbeatInterval: 0,
+							resumed: false,
+							gap: false,
+						})}\n\n`,
+					),
+				);
+				const beat = () =>
+					ctrl.enqueue(enc.encode("event: heartbeat\ndata: nope\n\n"));
+				beat();
+				const timer = setInterval(beat, 50);
+				req.signal.addEventListener("abort", () => clearInterval(timer));
+			},
+		});
+		return new Response(body, {
+			headers: { "content-type": "text/event-stream" },
+		});
+	});
 	const port = server.port;
 	const sse = client(`http://127.0.0.1:${port}/sse`, { staleTimeout: 250 });
 	try {

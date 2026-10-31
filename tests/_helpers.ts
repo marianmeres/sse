@@ -129,53 +129,50 @@ export async function startFlakyServer(port = 0): Promise<FlakyServer> {
 
 	const state: { status: number; hits: number } = { status: 200, hits: 0 };
 
-	const server = await listen(
-		(req) => {
-			const url = new URL(req.url);
+	const server = await listen((req) => {
+		const url = new URL(req.url);
 
-			if (url.pathname === "/sse/ping") {
-				return state.status === 200
-					? new Response(null, { status: 204 })
-					: new Response("nope", { status: state.status });
-			}
+		if (url.pathname === "/sse/ping") {
+			return state.status === 200
+				? new Response(null, { status: 204 })
+				: new Response("nope", { status: state.status });
+		}
 
-			if (url.pathname !== "/sse/events") {
-				return new Response("not found", { status: 404 });
-			}
+		if (url.pathname !== "/sse/events") {
+			return new Response("not found", { status: 404 });
+		}
 
-			state.hits++;
-			if (state.status !== 200) {
-				return new Response("nope", { status: state.status });
-			}
+		state.hits++;
+		if (state.status !== 200) {
+			return new Response("nope", { status: state.status });
+		}
 
-			const body = new ReadableStream<Uint8Array>({
-				start(ctrl) {
-					open.add(ctrl);
-					ctrl.enqueue(enc.encode("retry: 100\n\n"));
-					ctrl.enqueue(enc.encode(
-						`event: hello\ndata: ${
-							JSON.stringify({
-								clientId: url.searchParams.get("clientId") ?? "x",
-								namespace: url.searchParams.get("namespace") ?? "ns",
-								protocol: 1,
-								heartbeatInterval: 0,
-								resumed: false,
-								gap: false,
-							})
-						}\n\n`,
-					));
-					req.signal.addEventListener("abort", () => open.delete(ctrl));
-				},
-				cancel(this: void) {
-					// nothing held beyond the set entry, removed on abort
-				},
-			});
-			return new Response(body, {
-				headers: { "content-type": "text/event-stream" },
-			});
-		},
-		port,
-	);
+		const body = new ReadableStream<Uint8Array>({
+			start(ctrl) {
+				open.add(ctrl);
+				ctrl.enqueue(enc.encode("retry: 100\n\n"));
+				ctrl.enqueue(
+					enc.encode(
+						`event: hello\ndata: ${JSON.stringify({
+							clientId: url.searchParams.get("clientId") ?? "x",
+							namespace: url.searchParams.get("namespace") ?? "ns",
+							protocol: 1,
+							heartbeatInterval: 0,
+							resumed: false,
+							gap: false,
+						})}\n\n`,
+					),
+				);
+				req.signal.addEventListener("abort", () => open.delete(ctrl));
+			},
+			cancel(this: void) {
+				// nothing held beyond the set entry, removed on abort
+			},
+		});
+		return new Response(body, {
+			headers: { "content-type": "text/event-stream" },
+		});
+	}, port);
 
 	const flaky: FlakyServer = {
 		url: `http://127.0.0.1:${server.port}/sse`,
@@ -196,7 +193,9 @@ export async function startFlakyServer(port = 0): Promise<FlakyServer> {
 			for (const ctrl of open) {
 				try {
 					ctrl.close();
-				} catch { /* already gone */ }
+				} catch {
+					/* already gone */
+				}
 			}
 			open.clear();
 		},
@@ -233,10 +232,7 @@ export async function readStream(
 	},
 ): Promise<RawEvent[]> {
 	const controller = new AbortController();
-	const timer = setTimeout(
-		() => controller.abort(),
-		options.timeout ?? 5_000,
-	);
+	const timer = setTimeout(() => controller.abort(), options.timeout ?? 5_000);
 
 	const events: RawEvent[] = [];
 	try {
@@ -306,7 +302,9 @@ function parseBlock(block: string): RawEvent | null {
 	let json: unknown = null;
 	try {
 		json = JSON.parse(raw);
-	} catch { /* not JSON, leave null */ }
+	} catch {
+		/* not JSON, leave null */
+	}
 
 	return { id, event, data: raw, json };
 }

@@ -98,7 +98,10 @@ test("manifest-sync: the npm exports map is the dist/ twin of deno.json's", () =
 test("manifest-sync: no `publish` script, and both registries get the same version", () => {
 	// `publish` is an npm lifecycle hook: `pnpm publish` would run it
 	assert.equal(pkg.scripts.publish, undefined);
-	assert.match(pkg.scripts["publish:all"] ?? "", /^pnpm publish && pnpm run publish:jsr$/);
+	assert.match(
+		pkg.scripts["publish:all"] ?? "",
+		/^pnpm publish && pnpm run publish:jsr$/,
+	);
 	assert.match(pkg.scripts["publish:next"] ?? "", /^pnpm publish --tag next\b/);
 	assert.match(
 		pkg.scripts["publish:jsr"] ?? "",

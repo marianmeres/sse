@@ -3,8 +3,8 @@ import { test } from "node:test";
 
 import { backoffDelay } from "../src/client/backoff.ts";
 import { RoomRegistry } from "../src/client/rooms.ts";
-import { StalenessWatchdog } from "../src/client/staleness.ts";
 import { createSSEClient, SSEClient } from "../src/client/sse-client.ts";
+import { StalenessWatchdog } from "../src/client/staleness.ts";
 import { SSEError } from "../src/protocol/errors.ts";
 import type { SSEMessage } from "../src/protocol/frames.ts";
 import { formatEventId, parseEventId, ReplayBuffer } from "../src/server/replay.ts";
@@ -19,7 +19,7 @@ function msg(room: string, namespace = "ns", payload: unknown = {}): SSEMessage 
 
 test("backoffDelay stays within [d/2, d]", () => {
 	for (let attempt = 1; attempt <= 12; attempt++) {
-		const full = Math.min(30_000, 500 * Math.pow(2, attempt - 1));
+		const full = Math.min(30_000, 500 * 2 ** (attempt - 1));
 		for (let i = 0; i < 50; i++) {
 			const delay = backoffDelay(attempt, 500, 30_000);
 			assert.ok(delay >= Math.floor(full / 2));
@@ -29,13 +29,25 @@ test("backoffDelay stays within [d/2, d]", () => {
 });
 
 test("backoffDelay honours the ceiling", () => {
-	assert.deepEqual(backoffDelay(50, 500, 30_000, () => 1), 30_000);
-	assert.deepEqual(backoffDelay(50, 500, 30_000, () => 0), 15_000);
+	assert.deepEqual(
+		backoffDelay(50, 500, 30_000, () => 1),
+		30_000,
+	);
+	assert.deepEqual(
+		backoffDelay(50, 500, 30_000, () => 0),
+		15_000,
+	);
 });
 
 test("backoffDelay treats attempt < 1 as the first attempt", () => {
-	assert.deepEqual(backoffDelay(0, 1_000, 30_000, () => 0), 500);
-	assert.deepEqual(backoffDelay(-5, 1_000, 30_000, () => 0), 500);
+	assert.deepEqual(
+		backoffDelay(0, 1_000, 30_000, () => 0),
+		500,
+	);
+	assert.deepEqual(
+		backoffDelay(-5, 1_000, 30_000, () => 0),
+		500,
+	);
 });
 
 test("backoffDelay grows exponentially", () => {
@@ -53,10 +65,21 @@ test("event ids round trip", () => {
 });
 
 test("malformed event ids parse to null rather than throwing", () => {
-	for (
-		const bad of [null, undefined, "", "42", ":42", "srv7:", "srv7:abc", "srv7:-1"]
-	) {
-		assert.deepEqual(parseEventId(bad), null, `expected null for ${JSON.stringify(bad)}`);
+	for (const bad of [
+		null,
+		undefined,
+		"",
+		"42",
+		":42",
+		"srv7:",
+		"srv7:abc",
+		"srv7:-1",
+	]) {
+		assert.deepEqual(
+			parseEventId(bad),
+			null,
+			`expected null for ${JSON.stringify(bad)}`,
+		);
 	}
 });
 
@@ -99,7 +122,10 @@ test("ReplayBuffer.since filters by room", () => {
 	buffer.add("ns", msg("a"));
 
 	const got = buffer.since(0, 3, "ns", new Set(["a"]));
-	assert.deepEqual(got.map((e) => e.seq), [1, 3]);
+	assert.deepEqual(
+		got.map((e) => e.seq),
+		[1, 3],
+	);
 });
 
 test("ReplayBuffer.since filters by namespace", () => {
@@ -107,8 +133,14 @@ test("ReplayBuffer.since filters by namespace", () => {
 	buffer.add("ns1", msg("a", "ns1"));
 	buffer.add("ns2", msg("a", "ns2"));
 
-	assert.deepEqual(buffer.since(0, 2, "ns1", new Set(["a"])).map((e) => e.seq), [1]);
-	assert.deepEqual(buffer.since(0, 2, "ns2", new Set(["a"])).map((e) => e.seq), [2]);
+	assert.deepEqual(
+		buffer.since(0, 2, "ns1", new Set(["a"])).map((e) => e.seq),
+		[1],
+	);
+	assert.deepEqual(
+		buffer.since(0, 2, "ns2", new Set(["a"])).map((e) => e.seq),
+		[2],
+	);
 });
 
 test("ReplayBuffer.since replays broadcasts into any namespace", () => {
@@ -125,14 +157,20 @@ test("ReplayBuffer.since respects the upTo snapshot", () => {
 	buffer.add("ns", msg("a"));
 	buffer.add("ns", msg("a"));
 
-	assert.deepEqual(buffer.since(0, 2, "ns", new Set(["a"])).map((e) => e.seq), [1, 2]);
+	assert.deepEqual(
+		buffer.since(0, 2, "ns", new Set(["a"])).map((e) => e.seq),
+		[1, 2],
+	);
 });
 
 test("ReplayBuffer.since excludes the resume point itself", () => {
 	const buffer = new ReplayBuffer(10);
 	buffer.add("ns", msg("a"));
 	buffer.add("ns", msg("a"));
-	assert.deepEqual(buffer.since(1, 2, "ns", new Set(["a"])).map((e) => e.seq), [2]);
+	assert.deepEqual(
+		buffer.since(1, 2, "ns", new Set(["a"])).map((e) => e.seq),
+		[2],
+	);
 });
 
 test("ReplayBuffer.since returns nothing for a client with no rooms", () => {
@@ -172,8 +210,14 @@ test("sseFrame cannot be broken out of by payload content", () => {
 
 test("RoomRegistry reports the first handler as creating the room", () => {
 	const rooms = new RoomRegistry();
-	assert.deepEqual(rooms.add("a", () => {}), true);
-	assert.deepEqual(rooms.add("a", () => {}), false);
+	assert.deepEqual(
+		rooms.add("a", () => {}),
+		true,
+	);
+	assert.deepEqual(
+		rooms.add("a", () => {}),
+		false,
+	);
 	assert.deepEqual(rooms.rooms, ["a"]);
 });
 
@@ -191,7 +235,10 @@ test("RoomRegistry only reports empty on the last handler", () => {
 });
 
 test("RoomRegistry.remove on an unknown room is a no-op", () => {
-	assert.deepEqual(new RoomRegistry().remove("nope", () => {}), false);
+	assert.deepEqual(
+		new RoomRegistry().remove("nope", () => {}),
+		false,
+	);
 });
 
 test("RoomRegistry delivers to every handler", () => {
@@ -293,10 +340,10 @@ test("StalenessWatchdog.stop is idempotent", () => {
 // ---------------------------------------------------- client construction
 
 test("client requires a namespace", () => {
-	assert.throws(
-		() => createSSEClient({ url: "http://x/sse" } as never),
-		{ name: "SSEError", message: /namespace/ },
-	);
+	assert.throws(() => createSSEClient({ url: "http://x/sse" } as never), {
+		name: "SSEError",
+		message: /namespace/,
+	});
 	assert.throws(
 		() => createSSEClient({ url: "http://x/sse", namespace: "" }),
 		SSEError,
@@ -304,10 +351,10 @@ test("client requires a namespace", () => {
 });
 
 test("client rejects a relative url outside a browser", () => {
-	assert.throws(
-		() => createSSEClient({ url: "/sse", namespace: "ns" }),
-		{ name: "SSEError", message: /absolute/ },
-	);
+	assert.throws(() => createSSEClient({ url: "/sse", namespace: "ns" }), {
+		name: "SSEError",
+		message: /absolute/,
+	});
 });
 
 test("client mints a client id when none is given", () => {
@@ -365,7 +412,7 @@ test("client state store fires immediately with a snapshot", () => {
 	const sse = createSSEClient({ url: "http://x/sse", namespace: "ns", logger: null });
 	try {
 		let snapshot: unknown = null;
-		const unsub = sse.state.subscribe((s) => snapshot = s);
+		const unsub = sse.state.subscribe((s) => (snapshot = s));
 		unsub();
 		assert.deepEqual(snapshot, {
 			state: "idle",
@@ -385,12 +432,14 @@ test("a disposed client refuses further use", async () => {
 
 	assert.deepEqual(sse.connectionState, "disposed");
 	assert.throws(() => sse.connect());
-	await sse.subscribe("a", () => {}).then(
-		() => {
-			throw new Error("should have thrown");
-		},
-		() => {},
-	);
+	await sse
+		.subscribe("a", () => {})
+		.then(
+			() => {
+				throw new Error("should have thrown");
+			},
+			() => {},
+		);
 	// dispose() twice is a no-op, not an error.
 	sse.dispose();
 });

@@ -60,10 +60,6 @@
 			"Bash(pnpm rp*)",
 			"Bash(npx *@marianmeres/release*)"
 		],
-		"deny": [
-			"Bash(npm publish*)",
-			"Bash(pnpm publish*)",
-			"Bash(bun publish*)"
-		]
+		"deny": ["Bash(npm publish*)", "Bash(pnpm publish*)", "Bash(bun publish*)"]
 	}
 }

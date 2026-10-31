@@ -11,23 +11,23 @@
  *
  * Run:
  * ```
- * pnpm run example          # builds the client bundle, then serves
+ * pnpm run example         # builds the client bundle, then serves
  * ```
  *
  * @module
  */
 
-import {
-	demino,
-	deminoCompose,
-	type DeminoContext,
-	type DeminoHandler,
-	logListenInfo,
-} from "@marianmeres/demino";
-import { serve } from "@marianmeres/demino/node";
 import { dirname, join } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import {
+	type DeminoContext,
+	type DeminoHandler,
+	demino,
+	deminoCompose,
+	logListenInfo,
+} from "@marianmeres/demino";
+import { serve } from "@marianmeres/demino/node";
 import { createSSEApp } from "../src/server.ts";
 import { HistoryAdapter } from "./history.ts";
 import { Pipeline } from "./pipeline.ts";
@@ -133,9 +133,10 @@ const { app: sseApp, service } = createSSEApp("/sse", [maintenanceGate], {
 		if (typeof name !== "string" || !NAME_RE.test(name)) return null;
 		if (RESERVED_NAMES.includes(name.toLowerCase())) return null;
 
-		const namespace = typeof project === "string" && PROJECT_RE.test(project)
-			? project.toLowerCase()
-			: DEFAULT_PROJECT;
+		const namespace =
+			typeof project === "string" && PROJECT_RE.test(project)
+				? project.toLowerCase()
+				: DEFAULT_PROJECT;
 
 		// The client proposes a per-tab suffix and we honour it when it looks
 		// sane. Anything else gets a deterministic fallback — never trust the
@@ -186,14 +187,14 @@ apiApp.get(
 apiApp.get("/maintenance", () => ({ on: maintenance.on }));
 
 apiApp.post("/maintenance", async (req: Request) => {
-	const body = await req.json().catch(() => ({})) as { on?: unknown };
+	const body = (await req.json().catch(() => ({}))) as { on?: unknown };
 	maintenance.on = !!body.on;
 	console.log(`maintenance mode ${maintenance.on ? "ON (503)" : "off"}`);
 	return { on: maintenance.on };
 });
 
 apiApp.post("/burst", async (req: Request) => {
-	const body = await req.json().catch(() => ({})) as { count?: unknown };
+	const body = (await req.json().catch(() => ({}))) as { count?: unknown };
 	const count = Math.min(100, Math.max(1, Number(body.count) || 25));
 	await pipeline.burst(count);
 	return { ok: true, count, seq: service.stats().seq };

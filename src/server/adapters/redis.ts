@@ -125,9 +125,8 @@ export class SSEPubSubRedis implements SSEPubSubAdapter {
 	constructor(options: SSEPubSubRedisOptions) {
 		this.#client = options.client;
 		this.#channel = options.channel ?? "sse";
-		this.logger = options.logger === undefined
-			? createClog("sse:redis")
-			: options.logger;
+		this.logger =
+			options.logger === undefined ? createClog("sse:redis") : options.logger;
 	}
 
 	/**
@@ -166,9 +165,8 @@ export class SSEPubSubRedis implements SSEPubSubAdapter {
 			});
 			if (!subscriber.isOpen) await subscriber.connect();
 			if (this.#closed) return;
-			await subscriber.subscribe(
-				this.#channel,
-				(message: string) => this.#onWire(message),
+			await subscriber.subscribe(this.#channel, (message: string) =>
+				this.#onWire(message),
 			);
 			this.logger?.debug?.(
 				`redis fan-out up (channel=${this.#channel}, origin=${this.origin})`,
@@ -244,9 +242,11 @@ export class SSEPubSubRedis implements SSEPubSubAdapter {
 		const envelope = frame?.envelope;
 		if (
 			typeof frame?.origin !== "string" ||
-			envelope === null || typeof envelope !== "object" ||
+			envelope === null ||
+			typeof envelope !== "object" ||
 			(envelope.namespace !== null && typeof envelope.namespace !== "string") ||
-			envelope.message === null || typeof envelope.message !== "object" ||
+			envelope.message === null ||
+			typeof envelope.message !== "object" ||
 			// Without a room the message is undeliverable, yet it would still
 			// occupy (and evict) replay-buffer slots on every peer.
 			typeof envelope.message.room !== "string"

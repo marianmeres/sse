@@ -7,12 +7,10 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-
-import { createSSEClient, type SSEClient } from "../src/client/sse-client.ts";
-import { SSEError } from "../src/protocol/errors.ts";
-import type { SSEMessage } from "../src/protocol/frames.ts";
 import type { RedisLike } from "../src/adapters/redis.ts";
 import { SSEPubSubRedis } from "../src/adapters/redis.ts";
+import { createSSEClient, type SSEClient } from "../src/client/sse-client.ts";
+import type { SSEMessage } from "../src/protocol/frames.ts";
 import type { SSEBroadcastEnvelope } from "../src/server/mod.ts";
 import { createSSEApp, SSEService } from "../src/server/mod.ts";
 import { listen, rejection, sleep, startServer, until } from "./_helpers.ts";
@@ -91,10 +89,10 @@ class FakeRedisClient implements RedisLike {
 		if (this.failSubscribe) return Promise.reject(new Error("NOPERM subscribe"));
 		this.#hub.subscribeCalls++;
 		let set = this.#hub.listeners.get(channel);
-		if (!set) this.#hub.listeners.set(channel, set = new Set());
+		if (!set) this.#hub.listeners.set(channel, (set = new Set()));
 		set.add(listener);
 		let mine = this.#subs.get(channel);
-		if (!mine) this.#subs.set(channel, mine = new Set());
+		if (!mine) this.#subs.set(channel, (mine = new Set()));
 		mine.add(listener);
 		return Promise.resolve();
 	}
@@ -144,7 +142,10 @@ function envelope(
 test("redis adapter: publish before init() rejects", async () => {
 	const hub = new FakeRedisHub();
 	const { adapter: a } = adapter(hub);
-	await assert.rejects(() => a.publish(envelope({ v: 1 })), { name: "SSEError", message: /not initialized/ });
+	await assert.rejects(() => a.publish(envelope({ v: 1 })), {
+		name: "SSEError",
+		message: /not initialized/,
+	});
 	await a.close();
 });
 
@@ -316,7 +317,10 @@ test("redis adapter: close() destroys both connections and is idempotent", async
 	);
 
 	await a.close(); // second close is a no-op
-	await assert.rejects(() => a.publish(envelope({ v: 1 })), { name: "SSEError", message: /closed/ });
+	await assert.rejects(() => a.publish(envelope({ v: 1 })), {
+		name: "SSEError",
+		message: /closed/,
+	});
 	await assert.rejects(() => a.init(), { name: "SSEError", message: /closed/ });
 });
 
@@ -334,7 +338,11 @@ test("redis adapter: close() racing an in-flight init() leaves nothing behind", 
 	await a.close();
 	await init.catch(() => {});
 	assert.deepEqual(client.isOpen, false, "provided client destroyed");
-	assert.deepEqual(hub.liveSubscriptions(), 0, "no subscription finished materializing");
+	assert.deepEqual(
+		hub.liveSubscriptions(),
+		0,
+		"no subscription finished materializing",
+	);
 	for (const c of hub.clients) {
 		assert.deepEqual(c.isOpen, false, "no connection leaked past close()");
 	}
@@ -360,7 +368,11 @@ test("redis adapter: a failed init() stays failed and releases what it connected
 
 	const first = await rejection(() => a.init(), Error);
 	assert.match(first.message, /NOPERM/);
-	assert.deepEqual(client.isOpen, false, "failed init released the connected publisher");
+	assert.deepEqual(
+		client.isOpen,
+		false,
+		"failed init released the connected publisher",
+	);
 	for (const c of hub.clients) assert.deepEqual(c.isOpen, false);
 
 	const second = await rejection(() => a.init(), Error);
@@ -444,10 +456,10 @@ test("createSSEApp refuses service combined with service options", async () => {
 	try {
 		// The trap this closes: injecting a service while passing `verify`,
 		// which would otherwise be silently ignored — shipping unauthenticated.
-		assert.throws(
-			() => createSSEApp("/sse", [], { service, verify: () => null }),
-			{ name: "SSEError", message: /cannot be combined/ },
-		);
+		assert.throws(() => createSSEApp("/sse", [], { service, verify: () => null }), {
+			name: "SSEError",
+			message: /cannot be combined/,
+		});
 	} finally {
 		await service.close();
 	}
@@ -461,9 +473,7 @@ test("createSSEApp mounts over an injected service", async () => {
 	});
 	assert.ok(returned === service, "the injected service is the app's service");
 
-	const server = await listen(
-		app,
-	);
+	const server = await listen(app);
 	const url = `http://127.0.0.1:${server.port}/sse`;
 	const sse = client(url);
 	try {

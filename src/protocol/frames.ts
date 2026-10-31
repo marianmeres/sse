@@ -86,19 +86,19 @@ export type ClientOp =
 	| { op: typeof OP.SUB; clientId: string; namespace: string; rooms: string[] }
 	| { op: typeof OP.UNSUB; clientId: string; namespace: string; rooms: string[] }
 	| {
-		op: typeof OP.PUB;
-		clientId: string;
-		namespace: string;
-		room: string;
-		payload: unknown;
-	}
+			op: typeof OP.PUB;
+			clientId: string;
+			namespace: string;
+			room: string;
+			payload: unknown;
+	  }
 	| {
-		op: typeof OP.BROADCAST;
-		clientId: string;
-		namespace: string;
-		room: string;
-		payload: unknown;
-	};
+			op: typeof OP.BROADCAST;
+			clientId: string;
+			namespace: string;
+			room: string;
+			payload: unknown;
+	  };
 
 /** A successful `/rpc` response. */
 export interface RpcOk {

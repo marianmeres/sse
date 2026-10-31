@@ -28,12 +28,12 @@
  * @module
  */
 
+import type { SSEMessage } from "../src/protocol.ts";
 import {
 	type SSEBroadcastEnvelope,
 	type SSEPubSubAdapter,
 	SSEPubSubLocal,
 } from "../src/server.ts";
-import type { SSEMessage } from "../src/protocol.ts";
 import { HISTORY_LIMIT, isAppPayload } from "./shared.ts";
 
 /** Composite key for the buffer map. `|` cannot appear in a validated namespace. */

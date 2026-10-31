@@ -24,10 +24,10 @@
 
 import {
 	type Demino,
-	demino,
 	type DeminoContext,
 	type DeminoHandler,
 	type DeminoOptions,
+	demino,
 } from "@marianmeres/demino";
 import { SSEError } from "../protocol/errors.ts";
 import { SSEService, type SSEServiceOptions } from "./service.ts";
@@ -43,10 +43,10 @@ export {
 } from "./replay.ts";
 export {
 	type SSEConnectionContext,
-	sseFrame,
 	SSEService,
 	type SSEServiceOptions,
 	type SSEStats,
+	sseFrame,
 } from "./service.ts";
 
 /** Configuration for {@link createSSEApp}. */
@@ -135,13 +135,11 @@ export function createSSEApp(
 	const app = demino(mountPath, middlewares, options.deminoOptions);
 	const { httpAuth } = options;
 
-	app.get(
-		"/events",
-		(req: Request, _info: unknown, ctx: DeminoContext) =>
-			// Forwarding ctx.headers is what lets a CORS middleware apply to the
-			// stream — the handler returns a Response directly, so anything the
-			// middleware set would otherwise be lost.
-			service.handleStream(req, ctx.headers),
+	app.get("/events", (req: Request, _info: unknown, ctx: DeminoContext) =>
+		// Forwarding ctx.headers is what lets a CORS middleware apply to the
+		// stream — the handler returns a Response directly, so anything the
+		// middleware set would otherwise be lost.
+		service.handleStream(req, ctx.headers),
 	);
 
 	app.get("/ping", (req: Request) => service.handlePing(req));

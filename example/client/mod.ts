@@ -69,8 +69,8 @@ function createLogin({ initial, error, onSubmit }: LoginProps): ViewInstance {
 				submit: (e: Event) => {
 					e.preventDefault();
 					const name = (r.name as HTMLInputElement).value.trim();
-					const project = (r.project as HTMLInputElement).value.trim() ||
-						DEFAULT_PROJECT;
+					const project =
+						(r.project as HTMLInputElement).value.trim() || DEFAULT_PROJECT;
 
 					// The same rules the server enforces in `verify`. Checking
 					// here too is purely for the error message — the server is
@@ -163,8 +163,8 @@ function createFeed({ store, onLeave }: FeedProps): ViewInstance {
 				r.status.textContent = connected
 					? "connected"
 					: attempt > 0
-					? `reconnecting… (attempt ${attempt})`
-					: state;
+						? `reconnecting… (attempt ${attempt})`
+						: state;
 				r.status.title = lastError?.message ?? "";
 			}),
 		);
@@ -178,8 +178,8 @@ function createFeed({ store, onLeave }: FeedProps): ViewInstance {
 				badge.textContent = gap
 					? "gap — refetched"
 					: resumed
-					? "resumed"
-					: "live";
+						? "resumed"
+						: "live";
 				badge.title = from ? `last event id: ${from}` : "no resume point yet";
 			}),
 		);
@@ -218,9 +218,10 @@ function createFeed({ store, onLeave }: FeedProps): ViewInstance {
 					b.disabled = busy;
 				});
 				// The broadcast gate is server-side; this is only a hint.
-				r.broadcastHint.textContent = current === BROADCAST_ROOM
-					? "allowed here"
-					: `denied outside #${BROADCAST_ROOM}`;
+				r.broadcastHint.textContent =
+					current === BROADCAST_ROOM
+						? "allowed here"
+						: `denied outside #${BROADCAST_ROOM}`;
 			}),
 		);
 
@@ -229,8 +230,8 @@ function createFeed({ store, onLeave }: FeedProps): ViewInstance {
 		// size — no diffing, no keys, no surprises.
 		track(
 			store.entries.subscribe((list) => {
-				const atBottom = r.log.scrollHeight - r.log.scrollTop -
-						r.log.clientHeight < 40;
+				const atBottom =
+					r.log.scrollHeight - r.log.scrollTop - r.log.clientHeight < 40;
 				r.log.replaceChildren(...list.map(renderEntry));
 				r.empty.hidden = list.length > 0;
 				if (atBottom) r.log.scrollTop = r.log.scrollHeight;
@@ -286,7 +287,9 @@ function loadSession(): Session {
 		if (saved && typeof saved.name === "string") {
 			return { name: saved.name, project: saved.project || DEFAULT_PROJECT };
 		}
-	} catch { /* ignore */ }
+	} catch {
+		/* ignore */
+	}
 	return { name: "", project: DEFAULT_PROJECT };
 }
 
@@ -298,7 +301,9 @@ function showLogin(error = ""): void {
 function startFeed(session: Session): void {
 	try {
 		localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-	} catch { /* ignore */ }
+	} catch {
+		/* ignore */
+	}
 
 	store = createFeedStore(session, (reason) => {
 		// Terminal — the client gave up on purpose and will not retry, so the
@@ -307,13 +312,15 @@ function startFeed(session: Session): void {
 		showLogin(`Server refused the connection: ${reason}`);
 	});
 
-	show(createFeed({
-		store,
-		onLeave: () => {
-			store?.leave();
-			showLogin();
-		},
-	}));
+	show(
+		createFeed({
+			store,
+			onLeave: () => {
+				store?.leave();
+				showLogin();
+			},
+		}),
+	);
 }
 
 showLogin();

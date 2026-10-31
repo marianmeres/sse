@@ -28,6 +28,9 @@
  * @module
  */
 
+export { backoffDelay } from "./client/backoff.ts";
+
+export type { MessageHandler } from "./client/rooms.ts";
 export {
 	createSSEClient,
 	SSEClient,
@@ -36,9 +39,5 @@ export {
 	type SSEEvents,
 	type SSEState,
 } from "./client/sse-client.ts";
-
-export type { MessageHandler } from "./client/rooms.ts";
-
-export { backoffDelay } from "./client/backoff.ts";
 
 export * from "./protocol/mod.ts";

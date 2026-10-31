@@ -132,7 +132,10 @@ function checkInstalledManifest(dir) {
 	}
 	check(!(DEMINO in (pkg.dependencies ?? {})), `${DEMINO} must not be a dependency`);
 	check(typeof pkg.peerDependencies?.[DEMINO] === "string", `${DEMINO} is not a peer`);
-	check(pkg.peerDependenciesMeta?.[DEMINO]?.optional === true, `${DEMINO} peer is not optional`);
+	check(
+		pkg.peerDependenciesMeta?.[DEMINO]?.optional === true,
+		`${DEMINO} peer is not optional`,
+	);
 	for (const name of REPO_ONLY) {
 		check(!existsSync(join(dir, name)), `the tarball carries "${name}/"`);
 	}
@@ -148,14 +151,22 @@ check(
 	"dist/mod.js is missing - run `pnpm run build` first",
 );
 
-const node = [process.execPath, "--experimental-eventsource", "--disable-warning=UNDICI-ES"];
+const node = [
+	process.execPath,
+	"--experimental-eventsource",
+	"--disable-warning=UNDICI-ES",
+];
 const npmInstall = ["install", "--no-audit", "--no-fund", "--loglevel=error"];
 
 const project = mkdtempSync(join(tmpdir(), "sse-npm-smoke-"));
 try {
 	writeFileSync(
 		join(project, "package.json"),
-		JSON.stringify({ name: "sse-npm-smoke", private: true, type: "module" }, null, "\t"),
+		JSON.stringify(
+			{ name: "sse-npm-smoke", private: true, type: "module" },
+			null,
+			"\t",
+		),
 	);
 	const packDir = join(project, "pack");
 	mkdirSync(packDir);

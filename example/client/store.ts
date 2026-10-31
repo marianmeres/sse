@@ -316,7 +316,7 @@ export function createFeedStore(
 				`/api/history/${encodeURIComponent(ns)}/${encodeURIComponent(target)}`,
 			);
 			if (!res.ok) throw new Error(`HTTP ${res.status}`);
-			const { messages } = await res.json() as { messages: SSEMessage[] };
+			const { messages } = (await res.json()) as { messages: SSEMessage[] };
 			if (room.get() !== target) return; // user switched away mid-fetch
 
 			const backlog: Entry[] = [];
@@ -406,7 +406,7 @@ export function createFeedStore(
 				: await sse.publish(target, payload);
 
 			entries.update((list) =>
-				list.map((e) => (e.key === payload.id ? { ...e, recipients } : e))
+				list.map((e) => (e.key === payload.id ? { ...e, recipients } : e)),
 			);
 			if (!sse.connected) {
 				notice(`sent to ${recipients} recipient(s) with the stream down`);
@@ -441,7 +441,7 @@ export function createFeedStore(
 				headers: { "content-type": "application/json" },
 				body: JSON.stringify({ on }),
 			});
-			const body = await res.json() as { on: boolean };
+			const body = (await res.json()) as { on: boolean };
 			maintenance.set(body.on);
 			notice(
 				body.on

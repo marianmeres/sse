@@ -139,11 +139,12 @@ export class ReplayBuffer {
 		rooms: ReadonlySet<string>,
 	): ReplayEntry[] {
 		if (!this.enabled || !rooms.size) return [];
-		return this.#entries.filter((entry) =>
-			entry.seq > after &&
-			entry.seq <= upTo &&
-			rooms.has(entry.message.room) &&
-			(entry.namespace === null || entry.namespace === namespace)
+		return this.#entries.filter(
+			(entry) =>
+				entry.seq > after &&
+				entry.seq <= upTo &&
+				rooms.has(entry.message.room) &&
+				(entry.namespace === null || entry.namespace === namespace),
 		);
 	}
 

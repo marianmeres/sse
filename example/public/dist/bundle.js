@@ -200,6 +200,14 @@ function isCommentPayload(payload) {
 var NAME_RE = /^[a-z0-9][a-z0-9_-]{1,15}$/i;
 var PROJECT_RE = /^[a-z0-9][a-z0-9_-]{1,23}$/i;
 
+// src/client/backoff.ts
+function backoffDelay(attempt, base, max, rnd = Math.random) {
+  const n = Math.max(1, Math.floor(attempt));
+  const full = Math.min(max, base * 2 ** (n - 1));
+  const half = full / 2;
+  return Math.round(half + rnd() * half);
+}
+
 // node_modules/.pnpm/@marianmeres+clog@3.23.0/node_modules/@marianmeres/clog/dist/colors.js
 var CLOG_STYLED = /* @__PURE__ */ Symbol.for("@marianmeres/clog-styled");
 var SAFE_COLORS = {
@@ -1150,14 +1158,6 @@ var SSEDisposedError = class extends SSEError {
   }
 };
 
-// src/client/backoff.ts
-function backoffDelay(attempt, base, max, rnd = Math.random) {
-  const n = Math.max(1, Math.floor(attempt));
-  const full = Math.min(max, base * Math.pow(2, n - 1));
-  const half = full / 2;
-  return Math.round(half + rnd() * half);
-}
-
 // src/client/rooms.ts
 var RoomRegistry = class {
   #rooms = /* @__PURE__ */ new Map();
@@ -2088,9 +2088,7 @@ var SSEClient = class {
       this.#reconnectDelay,
       this.#reconnectDelayMax
     );
-    this.logger?.debug?.(
-      `reconnecting in ${delay}ms (attempt ${this.#attempt})`
-    );
+    this.logger?.debug?.(`reconnecting in ${delay}ms (attempt ${this.#attempt})`);
     this.#emit("reconnecting", { attempt: this.#attempt, delay });
     clearTimeout(this.#reconnectTimer);
     this.#reconnectTimer = setTimeout(() => this.#openStream(), delay);
@@ -2729,13 +2727,15 @@ function startFeed(session) {
     store?.leave();
     showLogin(`Server refused the connection: ${reason}`);
   });
-  show(createFeed({
-    store,
-    onLeave: () => {
-      store?.leave();
-      showLogin();
-    }
-  }));
+  show(
+    createFeed({
+      store,
+      onLeave: () => {
+        store?.leave();
+        showLogin();
+      }
+    })
+  );
 }
 showLogin();
 Object.defineProperty(globalThis, "feed", { get: () => store });

@@ -533,12 +533,12 @@ type ClientOp =
 	| { op: "unsub"; clientId: string; namespace: string; rooms: string[] }
 	| { op: "pub"; clientId: string; namespace: string; room: string; payload: unknown }
 	| {
-		op: "broadcast";
-		clientId: string;
-		namespace: string;
-		room: string;
-		payload: unknown;
-	};
+			op: "broadcast";
+			clientId: string;
+			namespace: string;
+			room: string;
+			payload: unknown;
+	  };
 
 interface RpcOk {
 	ok: true;
